@@ -2,11 +2,7 @@ const DEFAULT_LOCATION = { latitude: 37.6872, longitude: -97.3301, label: "Wichi
 const CACHE_KEY = "wichita-weather-last-forecast-v1";
 const LOCATION_KEY = "wichita-weather-location-v1";
 const THEME_KEY = "wichita-weather-theme-v1";
-const RADAR_WMS = "https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows";
 let activeLocation = readJSON(LOCATION_KEY) || DEFAULT_LOCATION;
-let radarMap;
-let radarLayer;
-let radarMarker;
 
 const $ = (selector) => document.querySelector(selector);
 const els = {
@@ -55,14 +51,20 @@ function feelsLike(tempF, humidity, windMph) {
 
 function symbolFor(text = "", isDay = true) {
   const value = text.toLowerCase();
-  if (/thunder|t-storm/.test(value)) return "⛈";
-  if (/snow|sleet|blizzard|ice/.test(value)) return "❄";
-  if (/rain|shower|drizzle/.test(value)) return "🌧";
-  if (/fog|haze|smoke/.test(value)) return "🌫";
-  if (/cloud|overcast/.test(value)) return "☁";
-  if (/partly|mostly sunny|mostly clear/.test(value)) return isDay ? "🌤" : "☁";
-  if (/wind/.test(value)) return "💨";
-  return isDay ? "☀" : "☾";
+  if (/thunder|t-storm/.test(value)) return "storm";
+  if (/(rain|shower|drizzle).*(snow|sleet|ice)|(snow|sleet|ice).*(rain|shower)/.test(value)) return "mixed";
+  if (/snow|sleet|blizzard|ice/.test(value)) return "snow";
+  if (/rain|shower|drizzle/.test(value)) return "rain";
+  if (/fog|haze|smoke/.test(value)) return "fog";
+  if (/wind|breezy/.test(value)) return "wind";
+  if (/partly|mostly sunny|mostly clear/.test(value)) return isDay ? "partly-day" : "partly-night";
+  if (/cloud|overcast/.test(value)) return "cloudy";
+  if (/sun|clear|fair/.test(value)) return isDay ? "clear-day" : "clear-night";
+  return "unknown";
+}
+
+function weatherIcon(name, label = "") {
+  return `<svg class="wx-icon" aria-hidden="true" focusable="false"><use href="#wx-${name}"></use></svg>${label ? `<span class="sr-only">${label}</span>` : ""}`;
 }
 
 function probability(period) {
@@ -70,47 +72,19 @@ function probability(period) {
   return value == null ? "" : `${Math.round(value)}%`;
 }
 
-function initializeRadar() {
-  if (typeof L === "undefined") {
-    $("#radarMap").hidden = true;
-    $("#radarUnavailable").hidden = false;
-    $("#radarTime").textContent = "Map library unavailable";
-    return;
-  }
-  radarMap = L.map("radarMap", { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView([activeLocation.latitude, activeLocation.longitude], 7);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 12,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-  }).addTo(radarMap);
-  radarLayer = L.tileLayer.wms(RADAR_WMS, {
-    layers: "conus_bref_qcd", styles: "radar_reflectivity", format: "image/png",
-    transparent: true, version: "1.3.0", opacity: .78, attribution: "NOAA/NWS MRMS"
-  }).addTo(radarMap);
-  radarMarker = L.circleMarker([activeLocation.latitude, activeLocation.longitude], {
-    radius: 6, color: "#fff", weight: 3, fillColor: "#1769aa", fillOpacity: 1
-  }).addTo(radarMap).bindTooltip(activeLocation.label || "Forecast location");
-  radarLayer.on("tileerror", () => {
-    $("#radarTime").textContent = "Some radar tiles unavailable";
-  });
-  updateRadar(activeLocation);
+function radarURL(location) {
+  const settings = {
+    agenda: { id: "weather", center: [location.longitude, location.latitude], location: [location.longitude, location.latitude], zoom: 7, layer: "bref_qcd" },
+    animating: false, base: "standard", artcc: false, county: false, cwa: false,
+    rfc: false, state: false, menu: true, shortFusedOnly: false,
+    opacity: { alerts: .8, local: .6, localStations: .8, national: .6 }
+  };
+  return `https://radar.weather.gov/?settings=v1_${encodeURIComponent(btoa(JSON.stringify(settings)))}`;
 }
 
-async function updateRadar(location, refresh = false) {
-  if (!radarMap) return;
-  const point = [location.latitude, location.longitude];
-  radarMap.setView(point, radarMap.getZoom() || 7);
-  radarMarker.setLatLng(point).setTooltipContent(location.label || "Forecast location");
-  if (refresh) radarLayer.setParams({ _refresh: Date.now() });
-  try {
-    const response = await fetch(`${RADAR_WMS}?service=WMS&request=GetCapabilities&version=1.3.0`);
-    if (!response.ok) throw new Error("Radar metadata unavailable");
-    const xml = new DOMParser().parseFromString(await response.text(), "text/xml");
-    const dimension = [...xml.querySelectorAll("Dimension")].find(node => node.getAttribute("name") === "time");
-    const latest = dimension?.getAttribute("default");
-    $("#radarTime").textContent = latest ? `Image ${new Date(latest).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Latest available image";
-  } catch (_) {
-    $("#radarTime").textContent = navigator.onLine ? "Latest available image" : "Radar unavailable offline";
-  }
+function updateRadarLink(location) {
+  $("#radarLink").href = radarURL(location);
+  $("#radarLocation").textContent = `Regional view centered on ${location.label || "your location"}`;
 }
 
 function render(data, cached = false) {
@@ -125,7 +99,7 @@ function render(data, cached = false) {
   els.currentTemp.textContent = temp ?? "--";
   els.currentCondition.textContent = condition;
   els.currentLabel.textContent = obs ? "Current conditions" : "Current forecast";
-  els.weatherMark.textContent = symbolFor(condition, firstHour.isDaytime);
+  els.weatherMark.innerHTML = weatherIcon(symbolFor(condition, firstHour.isDaytime));
   els.feelsLike.textContent = `${feelsLike(temp, humidity, windMph) ?? "--"}°`;
   els.humidity.textContent = obs?.relativeHumidity?.value == null ? "--" : `${humidity}%`;
   els.wind.textContent = obs?.windDirection?.value == null ? firstHour.windSpeed : `${firstHour.windDirection} ${windMph} mph`;
@@ -133,7 +107,7 @@ function render(data, cached = false) {
   els.hourly.innerHTML = hourly.properties.periods.slice(0, 24).map((period, index) => `
     <article class="hour">
       <time datetime="${period.startTime}">${index === 0 ? "Now" : new Intl.DateTimeFormat([], { hour: "numeric" }).format(new Date(period.startTime))}</time>
-      <span class="symbol" aria-label="${period.shortForecast}">${symbolFor(period.shortForecast, period.isDaytime)}</span>
+      <span class="symbol">${weatherIcon(symbolFor(period.shortForecast, period.isDaytime), period.shortForecast)}</span>
       <strong>${period.temperature}°</strong>
       <small>${probability(period)}</small>
     </article>`).join("");
@@ -155,7 +129,7 @@ function render(data, cached = false) {
     return `<details class="day">
       <summary aria-label="Show details for ${day.name}">
         <div class="day-name">${day.name}<small>${day.summary}</small></div>
-        <div class="day-symbol" aria-hidden="true">${day.symbol}</div>
+        <div class="day-symbol">${weatherIcon(day.symbol, day.summary)}</div>
         <div class="temps">${day.high == null ? "" : `${day.high}°`}<span>${day.low == null ? "" : `${day.low}°`}</span></div>
         <span class="day-chevron" aria-hidden="true">⌄</span>
       </summary>
@@ -194,7 +168,7 @@ function renderAlerts(features) {
 
 async function loadWeather(location = activeLocation) {
   activeLocation = location;
-  updateRadar(location);
+  updateRadarLink(location);
   setStatus("Loading the latest forecast…");
   try {
     const coords = `${location.latitude.toFixed(4)},${location.longitude.toFixed(4)}`;
@@ -243,7 +217,6 @@ $("#locateBtn").addEventListener("click", () => {
   );
 });
 $("#refreshBtn").addEventListener("click", () => loadWeather(activeLocation));
-$("#radarCenterBtn").addEventListener("click", () => updateRadar(activeLocation, true));
 
 $("#themeBtn").addEventListener("click", event => {
   event.stopPropagation();
@@ -309,5 +282,5 @@ window.addEventListener("offline", updateConnection);
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js");
 setTheme(localStorage.getItem(THEME_KEY) || "system");
 updateConnection();
-initializeRadar();
+updateRadarLink(activeLocation);
 loadWeather(activeLocation);
