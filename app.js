@@ -2,7 +2,11 @@ const DEFAULT_LOCATION = { latitude: 37.6872, longitude: -97.3301, label: "Wichi
 const CACHE_KEY = "wichita-weather-last-forecast-v1";
 const LOCATION_KEY = "wichita-weather-location-v1";
 const THEME_KEY = "wichita-weather-theme-v1";
+const RADAR_WMS = "https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows";
 let activeLocation = readJSON(LOCATION_KEY) || DEFAULT_LOCATION;
+let radarMap;
+let radarLayer;
+let radarMarker;
 
 const $ = (selector) => document.querySelector(selector);
 const els = {
@@ -64,6 +68,49 @@ function symbolFor(text = "", isDay = true) {
 function probability(period) {
   const value = period.probabilityOfPrecipitation?.value;
   return value == null ? "" : `${Math.round(value)}%`;
+}
+
+function initializeRadar() {
+  if (typeof L === "undefined") {
+    $("#radarMap").hidden = true;
+    $("#radarUnavailable").hidden = false;
+    $("#radarTime").textContent = "Map library unavailable";
+    return;
+  }
+  radarMap = L.map("radarMap", { zoomControl: true, attributionControl: true, scrollWheelZoom: false }).setView([activeLocation.latitude, activeLocation.longitude], 7);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 12,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+  }).addTo(radarMap);
+  radarLayer = L.tileLayer.wms(RADAR_WMS, {
+    layers: "conus_bref_qcd", styles: "radar_reflectivity", format: "image/png",
+    transparent: true, version: "1.3.0", opacity: .78, attribution: "NOAA/NWS MRMS"
+  }).addTo(radarMap);
+  radarMarker = L.circleMarker([activeLocation.latitude, activeLocation.longitude], {
+    radius: 6, color: "#fff", weight: 3, fillColor: "#1769aa", fillOpacity: 1
+  }).addTo(radarMap).bindTooltip(activeLocation.label || "Forecast location");
+  radarLayer.on("tileerror", () => {
+    $("#radarTime").textContent = "Some radar tiles unavailable";
+  });
+  updateRadar(activeLocation);
+}
+
+async function updateRadar(location, refresh = false) {
+  if (!radarMap) return;
+  const point = [location.latitude, location.longitude];
+  radarMap.setView(point, radarMap.getZoom() || 7);
+  radarMarker.setLatLng(point).setTooltipContent(location.label || "Forecast location");
+  if (refresh) radarLayer.setParams({ _refresh: Date.now() });
+  try {
+    const response = await fetch(`${RADAR_WMS}?service=WMS&request=GetCapabilities&version=1.3.0`);
+    if (!response.ok) throw new Error("Radar metadata unavailable");
+    const xml = new DOMParser().parseFromString(await response.text(), "text/xml");
+    const dimension = [...xml.querySelectorAll("Dimension")].find(node => node.getAttribute("name") === "time");
+    const latest = dimension?.getAttribute("default");
+    $("#radarTime").textContent = latest ? `Image ${new Date(latest).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : "Latest available image";
+  } catch (_) {
+    $("#radarTime").textContent = navigator.onLine ? "Latest available image" : "Radar unavailable offline";
+  }
 }
 
 function render(data, cached = false) {
@@ -147,6 +194,7 @@ function renderAlerts(features) {
 
 async function loadWeather(location = activeLocation) {
   activeLocation = location;
+  updateRadar(location);
   setStatus("Loading the latest forecast…");
   try {
     const coords = `${location.latitude.toFixed(4)},${location.longitude.toFixed(4)}`;
@@ -195,6 +243,7 @@ $("#locateBtn").addEventListener("click", () => {
   );
 });
 $("#refreshBtn").addEventListener("click", () => loadWeather(activeLocation));
+$("#radarCenterBtn").addEventListener("click", () => updateRadar(activeLocation, true));
 
 $("#themeBtn").addEventListener("click", event => {
   event.stopPropagation();
@@ -260,4 +309,5 @@ window.addEventListener("offline", updateConnection);
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js");
 setTheme(localStorage.getItem(THEME_KEY) || "system");
 updateConnection();
+initializeRadar();
 loadWeather(activeLocation);

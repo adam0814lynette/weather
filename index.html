@@ -7,6 +7,7 @@
   <meta name="description" content="A clear, mobile-friendly National Weather Service forecast.">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynhtnYBrtuFFlCaiuLykkEsiWb/Y=" crossorigin="">
   <link rel="stylesheet" href="styles.css">
   <title>Wichita Weather</title>
 </head>
@@ -46,6 +47,21 @@
     </div>
 
     <section id="alerts" class="alerts" aria-label="Weather alerts" hidden></section>
+
+    <section class="section radar-section" aria-labelledby="radarTitle">
+      <div class="section-heading">
+        <div><h2 id="radarTitle">Latest radar</h2><span id="radarTime">Loading latest image…</span></div>
+        <button class="text-button" id="radarCenterBtn" type="button">Recenter</button>
+      </div>
+      <div class="radar-card">
+        <div id="radarMap" aria-label="Latest NOAA radar map centered on the selected location"></div>
+        <div class="radar-unavailable" id="radarUnavailable" hidden>Radar could not be loaded. <a href="https://radar.weather.gov/" target="_blank" rel="noreferrer">Open NWS Radar</a></div>
+        <div class="radar-legend" aria-label="Radar reflectivity intensity from light to heavy">
+          <span>Light</span><i></i><span>Heavy</span>
+        </div>
+      </div>
+      <p class="radar-note">Quality-controlled NOAA/MRMS base reflectivity. Radar may include non-precipitation echoes. <a href="https://radar.weather.gov/" target="_blank" rel="noreferrer">Full NWS radar</a></p>
+    </section>
 
     <section class="hero card" id="current" aria-label="Current conditions">
       <div class="current-main">
@@ -87,6 +103,7 @@
         <p>Your saved location and theme remain on this device. If you tap the location button, your coordinates are sent directly to the National Weather Service to retrieve your forecast; this app does not operate a tracking server.</p>
       </div>
     </details>
+    <p class="app-version" aria-label="Application version 1.1.0">v1.1.0</p>
   </main>
   <template id="alertTemplate">
     <details class="alert-card">
@@ -94,6 +111,7 @@
       <div class="alert-body"></div>
     </details>
   </template>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
   <script src="app.js" defer></script>
 </body>
 </html>
