@@ -4,7 +4,7 @@ This is the living technical guide for Wichita Weather. Update it whenever behav
 
 ## Project status
 
-- Current version: **1.3.1**
+- Current version: **1.3.3**
 - Architecture: static client-side Progressive Web App (PWA)
 - Default location: Wichita, Kansas (`37.6872, -97.3301`)
 - Build system: none
@@ -155,7 +155,7 @@ There are two separate caching mechanisms:
 
 ### Application shell
 
-`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v9`.
+`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v11`.
 
 For same-origin application files, the service worker uses a network-first strategy and falls back to its cache when the network fails. Activating a new worker removes older application-shell caches.
 
@@ -274,6 +274,18 @@ Good candidates for future work include:
 Before adding a weather-data source, document its ownership, update frequency, rate limits, attribution requirements, CORS behavior, and fallback behavior.
 
 ## Change log
+
+### 1.3.3 — 2026-09-28
+
+- Isolated the horizontal 24-hour forecast track from the root document layout on Android Chrome.
+- Prevented off-screen hourly cards from widening and scaling the mobile page while retaining touch scrolling.
+- Updated the service-worker cache to `wichita-weather-shell-v11`.
+
+### 1.3.2 — 2026-09-28
+
+- Changed the SVG symbol sheet to `display: none` so Android Chrome does not include invisible symbol stroke bounds in the document width.
+- Hardened SVG definition containment while investigating Android viewport scaling.
+- Updated the service-worker cache to `wichita-weather-shell-v10`.
 
 ### 1.3.1 — 2026-09-28
 

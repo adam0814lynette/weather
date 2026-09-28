@@ -24,11 +24,11 @@ body {
     radial-gradient(circle at 85% -5%, rgba(95, 184, 255, .4), transparent 28rem),
     linear-gradient(160deg, #e8f6ff 0%, #f8fbfd 50%, #eef5f8 100%);
 }
-.icon-sprite { position: fixed; inset: 0 auto auto 0; width: 0; height: 0; overflow: hidden; contain: strict; pointer-events: none; }
+.icon-sprite { display: none; }
 .wx-icon { display: block; width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2.15; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 button, summary { -webkit-tap-highlight-color: transparent; }
 button { font: inherit; }
-.shell { width: min(100%, 760px); margin: auto; padding: max(22px, env(safe-area-inset-top)) 18px max(32px, env(safe-area-inset-bottom)); }
+.shell { width: min(100%, 760px); margin: auto; padding: max(22px, env(safe-area-inset-top)) 18px max(32px, env(safe-area-inset-bottom)); overflow-x: hidden; }
 .topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }
 .header-actions { display: flex; gap: 8px; }
 .eyebrow { margin: 0 0 3px; color: var(--blue); font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
@@ -80,11 +80,11 @@ h1 { margin: 0; font-size: clamp(1.55rem, 6vw, 2.2rem); letter-spacing: -.04em; 
 .metrics div { min-width: 0; }
 .metric-label { display: block; margin-bottom: 4px; color: var(--muted); font-size: .72rem; }
 .metrics strong { display: block; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.section { margin-top: 28px; }
+.section { min-width: 0; margin-top: 28px; }
 .section-heading { display: flex; justify-content: space-between; align-items: end; gap: 12px; margin: 0 3px 12px; }
 h2 { margin: 0; font-size: 1.1rem; letter-spacing: -.02em; }
 .section-heading span { color: var(--muted); font-size: .72rem; text-align: right; }
-.hourly-track { display: grid; grid-auto-flow: column; grid-auto-columns: 83px; gap: 9px; overflow-x: auto; padding: 2px 2px 10px; scroll-snap-type: x proximity; scrollbar-width: none; }
+.hourly-track { display: grid; width: 100%; max-width: 100%; min-width: 0; grid-auto-flow: column; grid-auto-columns: 83px; gap: 9px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain; contain: layout paint; padding: 2px 2px 10px; scroll-snap-type: x proximity; scrollbar-width: none; }
 .hourly-track::-webkit-scrollbar { display: none; }
 .hour { scroll-snap-align: start; padding: 13px 8px; text-align: center; border: 1px solid var(--line); border-radius: 17px; background: rgba(255,255,255,.78); }
 .hour time, .hour small { display: block; color: var(--muted); font-size: .72rem; }
