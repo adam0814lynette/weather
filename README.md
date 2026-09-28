@@ -1,2 +1,47 @@
-# weather
-Weather App with NOAA data
+# Wichita Weather
+
+A mobile-first, installable weather app using official forecast, observation, and alert data from the U.S. National Weather Service. Wichita, Kansas is the first-run default, and users can search for another U.S. city or ZIP code or use their device location.
+
+## Features
+
+- Current conditions, feels-like temperature, humidity, and wind
+- Scrollable 24-hour forecast and expandable seven-day details
+- Active NWS alerts with full descriptions and instructions
+- City/ZIP search, device location, and remembered preferences
+- Light, dark, and system themes
+- Cached last forecast and offline application shell
+- Responsive, keyboard-accessible interface
+
+## Run locally
+
+This app has no build step or package dependencies. Serve the directory over HTTP so geolocation and the service worker behave correctly:
+
+```sh
+python3 -m http.server 8000 --directory wichita-weather
+```
+
+Then open `http://localhost:8000`.
+
+## Deploy on GitHub Pages
+
+1. Push this directory to a GitHub repository.
+2. In **Settings → Pages**, choose **Deploy from a branch**.
+3. Select the branch and the folder containing the app.
+
+All application paths are relative, so the PWA works from a repository subdirectory such as `https://username.github.io/wichita-weather/`.
+
+## Data and privacy
+
+Weather forecasts, observations, and alerts come from the [National Weather Service API](https://www.weather.gov/documentation/services-web-api). Location search uses the [Open-Meteo Geocoding API](https://open-meteo.com/en/docs/geocoding-api), based on GeoNames data.
+
+The app has no analytics, advertising, accounts, or application server. Theme and location preferences are stored only in the browser. When device location is requested, its coordinates are sent directly to the National Weather Service to retrieve the local forecast.
+
+## Limitations
+
+- NWS point forecasts cover the United States and its territories.
+- Live data requires internet access; when unavailable, the app displays the last successfully saved forecast.
+- Browser location access normally requires HTTPS, which GitHub Pages provides automatically.
+
+## License
+
+Released under the MIT License. See [LICENSE](LICENSE).

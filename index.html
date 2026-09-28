@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#102a43">
+  <meta name="description" content="A clear, mobile-friendly National Weather Service forecast.">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+  <title>Wichita Weather</title>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">National Weather Service</p>
+        <h1 id="locationName">Wichita, KS</h1>
+      </div>
+      <div class="header-actions">
+        <button class="icon-button" id="themeBtn" type="button" aria-label="Change color theme" aria-haspopup="true" aria-expanded="false" title="Change theme">◐</button>
+        <button class="icon-button" id="locateBtn" type="button" aria-label="Use my current location" title="Use my location">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8.25A3.75 3.75 0 1 0 12 15.75 3.75 3.75 0 0 0 12 8.25Zm8.25 2.75A8.26 8.26 0 0 0 13 3.75V2h-2v1.75A8.26 8.26 0 0 0 3.75 11H2v2h1.75A8.26 8.26 0 0 0 11 20.25V22h2v-1.75A8.26 8.26 0 0 0 20.25 13H22v-2h-1.75ZM12 18.25A6.25 6.25 0 1 1 12 5.75a6.25 6.25 0 0 1 0 12.5Z"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="theme-menu" id="themeMenu" hidden>
+      <button type="button" data-theme="system">System</button>
+      <button type="button" data-theme="light">Light</button>
+      <button type="button" data-theme="dark">Dark</button>
+    </div>
+
+    <form class="search" id="searchForm" role="search">
+      <label class="sr-only" for="locationSearch">Search city or ZIP code</label>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 19.6-5.2-5.2a7.5 7.5 0 1 0-1.4 1.4l5.2 5.2 1.4-1.4ZM4 10a6 6 0 1 1 12 0 6 6 0 0 1-12 0Z"/></svg>
+      <input id="locationSearch" name="location" type="search" placeholder="Search city or ZIP code" autocomplete="postal-code" minlength="2" required>
+      <button type="submit">Search</button>
+    </form>
+    <div id="searchResults" class="search-results" hidden></div>
+
+    <div class="connection" id="connection" hidden><span></span> Offline · saved forecast</div>
+
+    <div id="status" class="status" role="status" aria-live="polite">
+      <span class="spinner" aria-hidden="true"></span> Loading the latest forecast…
+    </div>
+
+    <section id="alerts" class="alerts" aria-label="Weather alerts" hidden></section>
+
+    <section class="hero card" id="current" aria-label="Current conditions">
+      <div class="current-main">
+        <div>
+          <p class="label" id="currentLabel">Current conditions</p>
+          <div class="temperature"><span id="currentTemp">--</span><sup>°</sup></div>
+          <p class="condition" id="currentCondition">Loading…</p>
+        </div>
+        <div class="weather-mark" id="weatherMark" aria-hidden="true">☀</div>
+      </div>
+      <div class="metrics">
+        <div><span class="metric-label">Feels like</span><strong id="feelsLike">--°</strong></div>
+        <div><span class="metric-label">Humidity</span><strong id="humidity">--%</strong></div>
+        <div><span class="metric-label">Wind</span><strong id="wind">--</strong></div>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="hourlyTitle">
+      <div class="section-heading">
+        <h2 id="hourlyTitle">Next 24 hours</h2>
+        <span id="updatedAt"></span>
+      </div>
+      <div class="hourly-track" id="hourly"></div>
+    </section>
+
+    <section class="section" aria-labelledby="dailyTitle">
+      <div class="section-heading"><h2 id="dailyTitle">Seven-day forecast</h2></div>
+      <div class="daily-list" id="daily" aria-live="polite"></div>
+    </section>
+
+    <footer>
+      <p>Official forecast data from the <a href="https://www.weather.gov/" target="_blank" rel="noreferrer">National Weather Service</a>. Location search by <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>.</p>
+      <button id="refreshBtn" type="button">Refresh forecast</button>
+    </footer>
+    <details class="about">
+      <summary>About this forecast &amp; privacy</summary>
+      <div>
+        <p id="officeInfo">Forecast office information will appear after the weather loads.</p>
+        <p>Your saved location and theme remain on this device. If you tap the location button, your coordinates are sent directly to the National Weather Service to retrieve your forecast; this app does not operate a tracking server.</p>
+      </div>
+    </details>
+  </main>
+  <template id="alertTemplate">
+    <details class="alert-card">
+      <summary><span class="alert-symbol">!</span><span><strong></strong><small></small></span><span class="chevron">⌄</span></summary>
+      <div class="alert-body"></div>
+    </details>
+  </template>
+  <script src="app.js" defer></script>
+</body>
+</html>
