@@ -4,7 +4,7 @@ This is the living technical guide for Wichita Weather. Update it whenever behav
 
 ## Project status
 
-- Current version: **1.3.3**
+- Current version: **1.4.0**
 - Architecture: static client-side Progressive Web App (PWA)
 - Default location: Wichita, Kansas (`37.6872, -97.3301`)
 - Build system: none
@@ -21,7 +21,7 @@ The app was developed as a progressively enhanced static website:
 1. Establish a mobile-first layout around the official NWS forecast data.
 2. Add current observations, hourly forecasts, daily forecasts, and active alerts.
 3. Add PWA installation and last-successful-forecast caching.
-4. Add theme selection, location search, saved preferences, accessibility improvements, and offline feedback.
+4. Add location search, saved preferences, accessibility improvements, and offline feedback.
 5. Evaluate an embedded latest-frame radar map, then defer it after public basemap providers introduced access restrictions.
 6. Validate each feature in a phone-sized browser using live API responses.
 
@@ -31,9 +31,9 @@ The project deliberately avoids a framework and compilation step. HTML, CSS, and
 
 | File | Purpose |
 | --- | --- |
-| `index.html` | Page structure, accessible labels, controls, forecast sections, radar container, and third-party Leaflet includes |
-| `styles.css` | Responsive layout, themes, cards, radar presentation, forecast details, and accessibility helpers |
-| `app.js` | API requests, rendering, location and theme state, radar setup, caching, geolocation, and user interactions |
+| `index.html` | Page structure, accessible labels, controls, forecast sections, solar times, and the official radar action |
+| `styles.css` | Responsive layout, weather-responsive palettes, contrast rules, cards, forecast details, and accessibility helpers |
+| `app.js` | API requests, rendering, weather-palette selection, solar calculations, caching, geolocation, and user interactions |
 | `sw.js` | Service worker for caching the local application shell |
 | `manifest.webmanifest` | Installable PWA metadata and icons |
 | `icon.svg` | Source application artwork |
@@ -47,10 +47,10 @@ The project deliberately avoids a framework and compilation step. HTML, CSS, and
 
 At the end of `app.js`, startup occurs in this order:
 
-1. Read and apply the saved theme.
-2. Set the online/offline indicator.
-3. Initialize the Leaflet radar map.
-4. Load weather for the saved location or Wichita if no location has been saved.
+1. Set the online/offline indicator.
+2. Prepare the location-aware official radar link.
+3. Load weather for the saved location or Wichita if no location has been saved.
+4. Calculate sunrise/sunset and apply the current weather palette.
 5. Register the service worker when the page is served over HTTP or HTTPS.
 
 The app should be served over HTTP during development. Opening `index.html` directly may display weather, but service workers and browser geolocation have restrictions on `file://` pages.
@@ -100,7 +100,7 @@ When the location changes:
 - `activeLocation` is updated.
 - The location is saved locally.
 - Weather data is reloaded.
-- The radar map and marker move to the selected coordinates.
+- The official radar link updates to the selected coordinates.
 - The Refresh button continues to use the active location.
 
 ## Rendering behavior
@@ -127,6 +127,22 @@ Active alerts are rendered as expandable cards. Alert descriptions and instructi
 
 To customize an icon, edit its `<symbol id="wx-…">` paths in `index.html`. All icons use a `48 × 48` viewBox, inherit `currentColor`, and share stroke settings from `.wx-icon` in `styles.css`. To change condition matching, edit the ordered checks inside `symbolFor()` in `app.js`. More specific conditions must remain above broad conditions such as clouds. New symbols should preserve the nearby textual forecast and screen-reader labels.
 
+## Sunrise, sunset, and weather palettes
+
+`solarTimes()` calculates sunrise and sunset locally from the selected coordinates and the location time zone returned by the NWS `/points` endpoint. It uses the NOAA solar-equation approach, including the standard 90.833° sunrise/sunset zenith. No additional network service is required.
+
+`weatherPalette()` selects one of these palettes from current conditions and solar time:
+
+- `clear-day`: pale blue and white
+- `golden`: peach, coral, and lavender within 75 minutes of sunrise or sunset
+- `cloudy` / `fog`: silver-gray and white
+- `rain`: cool blue-gray
+- `snow`: icy cyan and white
+- `storm`: dark slate with light typography
+- `night`: deep navy with light typography
+
+Each palette defines its own primary text, secondary text, links, borders, cards, control text, and alert text through CSS custom properties. Do not add fixed dark or light text colors to general components; use `var(--ink)`, `var(--muted)`, `var(--blue)`, or `var(--button-ink)` so contrast follows the active palette.
+
 ## Radar status
 
 Embedded radar is currently deferred. Earlier versions combined NOAA's public MRMS WMS radar layer with third-party basemap tiles, but the unauthenticated basemap services produced access-block and API-key errors in real deployments. Version 1.2.2 removed Leaflet and all embedded tile requests. Version 1.3.0 adds a prominent official NWS radar action near the top of the forecast.
@@ -143,7 +159,6 @@ The following keys are currently used:
 | --- | --- |
 | `wichita-weather-last-forecast-v1` | Last successful combined forecast object |
 | `wichita-weather-location-v1` | Active latitude, longitude, and display label |
-| `wichita-weather-theme-v1` | `system`, `light`, or `dark` |
 
 Storage values are read defensively through `readJSON()`. If a value is missing or malformed, the app falls back to safe defaults.
 
@@ -155,7 +170,7 @@ There are two separate caching mechanisms:
 
 ### Application shell
 
-`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v11`.
+`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v12`.
 
 For same-origin application files, the service worker uses a network-first strategy and falls back to its cache when the network fails. Activating a new worker removes older application-shell caches.
 
@@ -165,17 +180,9 @@ After every successful weather request, the combined forecast object is saved to
 
 Third-party map resources and live radar tiles are not cached by the service worker.
 
-## Themes
+## Color and contrast
 
-The theme menu supports:
-
-- `system`: follow `prefers-color-scheme`
-- `light`: force the light palette
-- `dark`: force the dark palette
-
-The selection is stored in `localStorage`. Theme colors are primarily controlled through CSS custom properties in `:root` and the `data-theme` attribute on `<html>`.
-
-When adding a component, verify it in all three modes. Avoid hard-coded light backgrounds unless a corresponding dark-mode rule is added.
+The app no longer offers manual themes. `data-weather` on `<html>` controls the active palette. When adding a component, verify it in every weather palette—especially `night` and `storm`. Avoid fixed white backgrounds or text colors in general UI components because those can become unreadable when the palette changes.
 
 ## Accessibility conventions
 
@@ -225,7 +232,8 @@ Test at minimum:
 
 - Mobile viewport around 390 × 844
 - Desktop viewport
-- Light, dark, and system themes
+- Every weather-responsive palette, especially night and storm text contrast
+- Sunrise and sunset values for the selected location and time zone
 - Wichita first-run forecast
 - City search and ZIP-code search
 - Saved location after reload
@@ -254,7 +262,6 @@ No API keys or secrets belong in this repository. If a future feature requires a
 - Weather and radar coverage are limited to the NWS service area.
 - The first observation station returned by NWS may not be the geographically closest under every condition.
 - Unicode weather symbols can vary slightly across operating systems.
-- The current radar is a latest-frame national mosaic and does not animate.
 - The official radar viewer requires an internet connection.
 - Location search depends on a third-party geocoding service.
 - NWS or mapping-service outages can temporarily prevent live updates.
@@ -274,6 +281,15 @@ Good candidates for future work include:
 Before adding a weather-data source, document its ownership, update frequency, rate limits, attribution requirements, CORS behavior, and fallback behavior.
 
 ## Change log
+
+### 1.4.0 — 2026-09-28
+
+- Removed manual light, dark, and system theme controls.
+- Added automatic clear-day, golden-hour, cloudy, fog, rain, snow, storm, and night palettes.
+- Added palette-specific primary, secondary, control, link, and alert colors for readable contrast.
+- Added locally calculated sunrise and sunset times using the selected coordinates and NWS time zone.
+- Updated the browser theme color with the active weather palette.
+- Updated the service-worker cache to `wichita-weather-shell-v12`.
 
 ### 1.3.3 — 2026-09-28
 

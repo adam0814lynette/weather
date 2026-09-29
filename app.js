@@ -1,7 +1,6 @@
 const DEFAULT_LOCATION = { latitude: 37.6872, longitude: -97.3301, label: "Wichita, KS" };
 const CACHE_KEY = "wichita-weather-last-forecast-v1";
 const LOCATION_KEY = "wichita-weather-location-v1";
-const THEME_KEY = "wichita-weather-theme-v1";
 let activeLocation = readJSON(LOCATION_KEY) || DEFAULT_LOCATION;
 
 const $ = (selector) => document.querySelector(selector);
@@ -10,6 +9,7 @@ const els = {
   currentTemp: $("#currentTemp"), currentCondition: $("#currentCondition"),
   currentLabel: $("#currentLabel"), weatherMark: $("#weatherMark"),
   feelsLike: $("#feelsLike"), humidity: $("#humidity"), wind: $("#wind"),
+  sunrise: $("#sunriseTime"), sunset: $("#sunsetTime"),
   hourly: $("#hourly"), daily: $("#daily"), updated: $("#updatedAt"),
   connection: $("#connection"), officeInfo: $("#officeInfo"), searchResults: $("#searchResults")
 };
@@ -21,14 +21,6 @@ function readJSON(key) {
 function setStatus(message = "", error = false) {
   els.status.className = `status${error ? " error" : ""}`;
   els.status.innerHTML = message ? `${error ? "" : '<span class="spinner" aria-hidden="true"></span>'}${message}` : "";
-}
-
-function setTheme(theme) {
-  const selected = ["light", "dark"].includes(theme) ? theme : "system";
-  document.documentElement.dataset.theme = selected === "system" ? "" : selected;
-  localStorage.setItem(THEME_KEY, selected);
-  $("#themeBtn").textContent = selected === "dark" ? "☾" : selected === "light" ? "☀" : "◐";
-  document.querySelectorAll("[data-theme]").forEach(button => button.setAttribute("aria-current", String(button.dataset.theme === selected)));
 }
 
 async function getJSON(url) {
@@ -72,6 +64,49 @@ function probability(period) {
   return value == null ? "" : `${Math.round(value)}%`;
 }
 
+function solarTimes(date, latitude, longitude, timeZone) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+    timeZone, year: "numeric", month: "numeric", day: "numeric"
+  }).formatToParts(date).filter(part => part.type !== "literal").map(part => [part.type, Number(part.value)]));
+  const dayStart = Date.UTC(parts.year, parts.month - 1, parts.day);
+  const yearStart = Date.UTC(parts.year, 0, 0);
+  const dayOfYear = Math.floor((dayStart - yearStart) / 86400000);
+  const gamma = 2 * Math.PI / 365 * (dayOfYear - 1);
+  const eqTime = 229.18 * (.000075 + .001868*Math.cos(gamma) - .032077*Math.sin(gamma) - .014615*Math.cos(2*gamma) - .040849*Math.sin(2*gamma));
+  const decl = .006918 - .399912*Math.cos(gamma) + .070257*Math.sin(gamma) - .006758*Math.cos(2*gamma) + .000907*Math.sin(2*gamma) - .002697*Math.cos(3*gamma) + .00148*Math.sin(3*gamma);
+  const latRad = latitude * Math.PI / 180;
+  const hourAngle = Math.acos(Math.cos(90.833 * Math.PI / 180) / (Math.cos(latRad) * Math.cos(decl)) - Math.tan(latRad) * Math.tan(decl));
+  if (!Number.isFinite(hourAngle)) return { sunrise: null, sunset: null };
+  const angleDegrees = hourAngle * 180 / Math.PI;
+  const solarNoon = 720 - 4 * longitude - eqTime;
+  return {
+    sunrise: new Date(dayStart + (solarNoon - 4 * angleDegrees) * 60000),
+    sunset: new Date(dayStart + (solarNoon + 4 * angleDegrees) * 60000)
+  };
+}
+
+function weatherPalette(condition, solar, now = new Date()) {
+  const value = condition.toLowerCase();
+  if (/thunder|t-storm/.test(value)) return "storm";
+  if (/snow|sleet|blizzard|ice/.test(value)) return "snow";
+  if (/rain|shower|drizzle/.test(value)) return "rain";
+  if (/fog|haze|smoke/.test(value)) return "fog";
+  if (/cloud|overcast/.test(value)) return "cloudy";
+  if (solar.sunrise && solar.sunset) {
+    const goldenWindow = 75 * 60000;
+    if (Math.abs(now - solar.sunrise) <= goldenWindow || Math.abs(now - solar.sunset) <= goldenWindow) return "golden";
+    if (now < solar.sunrise || now >= solar.sunset) return "night";
+  }
+  return "clear-day";
+}
+
+function applyWeatherPalette(condition, solar) {
+  const palette = weatherPalette(condition, solar);
+  document.documentElement.dataset.weather = palette;
+  const colors = { "clear-day":"#dff3ff", golden:"#f6b27e", cloudy:"#cbd3d8", fog:"#d4dadd", rain:"#9caeb9", snow:"#d9f0f8", storm:"#142d41", night:"#091b29" };
+  document.querySelector('meta[name="theme-color"]').content = colors[palette];
+}
+
 function radarURL(location) {
   const settings = {
     agenda: { id: "weather", center: [location.longitude, location.latitude], location: [location.longitude, location.latitude], zoom: 7, layer: "bref_qcd" },
@@ -96,6 +131,11 @@ function render(data, cached = false) {
   const humidity = Math.round(obs?.relativeHumidity?.value ?? 0);
   const windMph = obs?.windSpeed?.value == null ? Number.parseInt(firstHour.windSpeed) || 0 : Math.round(obs.windSpeed.value * .621371);
   const condition = obs?.textDescription || firstHour.shortForecast;
+  const coordinates = data.location || activeLocation;
+  const timeZone = data.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const solar = solarTimes(new Date(), coordinates.latitude, coordinates.longitude, timeZone);
+  const timeFormatter = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit", timeZone });
+  applyWeatherPalette(condition, solar);
   els.currentTemp.textContent = temp ?? "--";
   els.currentCondition.textContent = condition;
   els.currentLabel.textContent = obs ? "Current conditions" : "Current forecast";
@@ -103,6 +143,8 @@ function render(data, cached = false) {
   els.feelsLike.textContent = `${feelsLike(temp, humidity, windMph) ?? "--"}°`;
   els.humidity.textContent = obs?.relativeHumidity?.value == null ? "--" : `${humidity}%`;
   els.wind.textContent = obs?.windDirection?.value == null ? firstHour.windSpeed : `${firstHour.windDirection} ${windMph} mph`;
+  els.sunrise.textContent = solar.sunrise ? timeFormatter.format(solar.sunrise) : "Unavailable";
+  els.sunset.textContent = solar.sunset ? timeFormatter.format(solar.sunset) : "Unavailable";
 
   els.hourly.innerHTML = hourly.properties.periods.slice(0, 24).map((period, index) => `
     <article class="hour">
@@ -192,7 +234,12 @@ async function loadWeather(location = activeLocation) {
         office = { name: officeData.properties?.name || `NWS ${p.cwa}`, url: officeData.properties?.website || p.forecastOffice };
       } catch (_) { office = { name: `NWS ${p.cwa}`, url: p.forecastOffice }; }
     }
-    const data = { label, observation, hourly, daily, alerts, office, savedAt: new Date().toISOString() };
+    const data = {
+      label, observation, hourly, daily, alerts, office,
+      location: { latitude: location.latitude, longitude: location.longitude },
+      timeZone: p.timeZone,
+      savedAt: new Date().toISOString()
+    };
     localStorage.setItem(CACHE_KEY, JSON.stringify(data));
     localStorage.setItem(LOCATION_KEY, JSON.stringify(activeLocation));
     render(data);
@@ -217,26 +264,6 @@ $("#locateBtn").addEventListener("click", () => {
   );
 });
 $("#refreshBtn").addEventListener("click", () => loadWeather(activeLocation));
-
-$("#themeBtn").addEventListener("click", event => {
-  event.stopPropagation();
-  const menu = $("#themeMenu");
-  menu.hidden = !menu.hidden;
-  event.currentTarget.setAttribute("aria-expanded", String(!menu.hidden));
-});
-$("#themeMenu").addEventListener("click", event => {
-  const choice = event.target.closest("[data-theme]");
-  if (!choice) return;
-  setTheme(choice.dataset.theme);
-  $("#themeMenu").hidden = true;
-  $("#themeBtn").setAttribute("aria-expanded", "false");
-});
-document.addEventListener("click", event => {
-  if (!event.target.closest("#themeMenu") && !event.target.closest("#themeBtn")) {
-    $("#themeMenu").hidden = true;
-    $("#themeBtn").setAttribute("aria-expanded", "false");
-  }
-});
 
 $("#searchForm").addEventListener("submit", async event => {
   event.preventDefault();
@@ -280,7 +307,7 @@ window.addEventListener("online", updateConnection);
 window.addEventListener("offline", updateConnection);
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js");
-setTheme(localStorage.getItem(THEME_KEY) || "system");
+localStorage.removeItem("wichita-weather-theme-v1");
 updateConnection();
 updateRadarLink(activeLocation);
 loadWeather(activeLocation);
