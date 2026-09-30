@@ -45,6 +45,10 @@
       <button type="submit">Search</button>
     </form>
     <div id="searchResults" class="search-results" hidden></div>
+    <div class="location-tools">
+      <div class="favorites" id="favorites" aria-label="Saved locations"></div>
+      <button class="save-location" id="saveLocationBtn" type="button">☆ Save location</button>
+    </div>
 
     <div class="connection" id="connection" hidden><span></span> Offline · saved forecast</div>
 
@@ -76,10 +80,15 @@
         <div><span class="metric-label">Humidity</span><strong id="humidity">--%</strong></div>
         <div><span class="metric-label">Wind</span><strong id="wind">--</strong></div>
       </div>
-      <div class="sun-times" aria-label="Sunrise and sunset times">
-        <div><span class="sun-mark sunrise-mark" aria-hidden="true">↗</span><span><small>Sunrise</small><strong id="sunriseTime">--</strong></span></div>
-        <div><span class="sun-mark sunset-mark" aria-hidden="true">↘</span><span><small>Sunset</small><strong id="sunsetTime">--</strong></span></div>
-      </div>
+      <details class="more-conditions">
+        <summary>More conditions <span aria-hidden="true">⌄</span></summary>
+        <div class="conditions-grid">
+          <div><span class="metric-label">Dew point</span><strong id="dewPoint">--</strong></div>
+          <div><span class="metric-label">Visibility</span><strong id="visibility">--</strong></div>
+          <div><span class="metric-label">Pressure</span><strong id="pressure">--</strong></div>
+          <div><span class="metric-label">Wind gusts</span><strong id="windGust">--</strong></div>
+        </div>
+      </details>
     </section>
 
     <section class="section" aria-labelledby="hourlyTitle">
@@ -87,12 +96,30 @@
         <h2 id="hourlyTitle">Next 24 hours</h2>
         <span id="updatedAt"></span>
       </div>
+      <p class="precip-label">Precipitation chance · next 12 hours</p>
+      <div class="precip-chart" id="precipChart" aria-label="Precipitation chance for the next 12 hours"></div>
       <div class="hourly-track" id="hourly"></div>
     </section>
 
     <section class="section" aria-labelledby="dailyTitle">
       <div class="section-heading"><h2 id="dailyTitle">Seven-day forecast</h2></div>
       <div class="daily-list" id="daily" aria-live="polite"></div>
+    </section>
+
+    <section class="section astronomy-card" aria-labelledby="astronomyTitle">
+      <div class="section-heading"><h2 id="astronomyTitle">Sun &amp; moon</h2><span id="astronomyDate"></span></div>
+      <div class="solar-grid" aria-label="Dawn, sunrise, sunset, and dusk times">
+        <div><small>Dawn</small><strong id="dawnTime">--</strong></div>
+        <div><small>Sunrise</small><strong id="sunriseTime">--</strong></div>
+        <div><small>Sunset</small><strong id="sunsetTime">--</strong></div>
+        <div><small>Dusk</small><strong id="duskTime">--</strong></div>
+      </div>
+      <div class="moon-row">
+        <span class="moon-mark" aria-hidden="true"><svg viewBox="0 0 48 48"><path d="M34.5 34.5A15 15 0 0 1 16 14a16 16 0 1 0 18.5 20.5Z"/><circle cx="37" cy="12" r="2"/></svg></span>
+        <span><small>Moon phase</small><strong id="moonPhase">--</strong></span>
+        <span class="moon-illumination" id="moonIllumination"></span>
+      </div>
+      <p class="astronomy-note">Solar and lunar values are calculated locally and are approximate.</p>
     </section>
 
     <footer>
@@ -107,7 +134,7 @@
       </div>
     </details>
     <div class="bottom-row">
-      <p class="app-version" aria-label="Application version 1.4.0">v1.4.0</p>
+      <p class="app-version" aria-label="Application version 1.6.0">v1.6.0</p>
     </div>
   </main>
   <template id="alertTemplate">

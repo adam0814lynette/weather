@@ -4,7 +4,7 @@ This is the living technical guide for Wichita Weather. Update it whenever behav
 
 ## Project status
 
-- Current version: **1.4.0**
+- Current version: **1.6.0**
 - Architecture: static client-side Progressive Web App (PWA)
 - Default location: Wichita, Kansas (`37.6872, -97.3301`)
 - Build system: none
@@ -21,7 +21,7 @@ The app was developed as a progressively enhanced static website:
 1. Establish a mobile-first layout around the official NWS forecast data.
 2. Add current observations, hourly forecasts, daily forecasts, and active alerts.
 3. Add PWA installation and last-successful-forecast caching.
-4. Add location search, saved preferences, accessibility improvements, and offline feedback.
+4. Add location search, favorite locations, accessibility improvements, and offline feedback.
 5. Evaluate an embedded latest-frame radar map, then defer it after public basemap providers introduced access restrictions.
 6. Validate each feature in a phone-sized browser using live API responses.
 
@@ -72,7 +72,7 @@ Open `http://localhost:8000`.
 5. Request forecast-office information when available.
 6. Combine the responses into one local object.
 7. Save the successful result to `localStorage`.
-8. Render current conditions, hourly cards, daily details, alerts, timestamps, and forecast-office information.
+8. Render current and extended observations, precipitation chart, hourly cards, dated daily details, alerts, relative data age, and forecast-office information.
 
 If current observations are unavailable, the current-conditions card falls back to the first hourly forecast period.
 
@@ -93,6 +93,8 @@ Users can change it in two ways:
 - Search for a U.S. city or ZIP code through Open-Meteo's geocoding endpoint.
 - Grant browser geolocation access through the target button.
 
+Up to five locations can be saved as compact shortcuts. The Save location button toggles the current location in that list; each shortcut can be loaded or removed independently.
+
 Search requests are restricted to `countryCode=US` because the NWS point-forecast service is intended for the United States and its territories.
 
 When the location changes:
@@ -109,13 +111,17 @@ When the location changes:
 
 The current card uses the latest station observation when possible. Temperature values from station observations are converted from Celsius to Fahrenheit. Heat index or wind chill is calculated locally when conditions meet the applicable thresholds; otherwise the displayed feels-like value is the air temperature.
 
+The expandable More conditions panel displays dew point, visibility, barometric pressure, and reported wind gusts. Missing station measurements are labeled clearly rather than inferred from forecast data.
+
 ### Hourly forecast
 
 The first 24 NWS hourly periods are displayed in a horizontally scrollable track. Each card includes time, a weather symbol, temperature, and precipitation probability.
 
+A compact bar chart summarizes NWS precipitation probabilities for the next 12 hourly periods.
+
 ### Daily forecast
 
-The NWS day/night periods are paired into up to seven rows. Rows use native `<details>` and `<summary>` elements so they are clickable and keyboard accessible. Expanded content shows the detailed NWS forecast, precipitation probability, and wind.
+The NWS day/night periods are paired into up to seven rows. Each row displays both the weekday and calendar date. Rows use native `<details>` and `<summary>` elements so they are clickable and keyboard accessible. Expanded content shows the detailed NWS forecast, precipitation probability, and wind.
 
 ### Alerts
 
@@ -129,7 +135,9 @@ To customize an icon, edit its `<symbol id="wx-…">` paths in `index.html`. All
 
 ## Sunrise, sunset, and weather palettes
 
-`solarTimes()` calculates sunrise and sunset locally from the selected coordinates and the location time zone returned by the NWS `/points` endpoint. It uses the NOAA solar-equation approach, including the standard 90.833° sunrise/sunset zenith. No additional network service is required.
+`solarTimes()` calculates civil dawn, sunrise, sunset, and civil dusk locally from the selected coordinates and the location time zone returned by the NWS `/points` endpoint. It uses the NOAA solar-equation approach, including the standard 90.833° sunrise/sunset zenith and 96° civil-twilight zenith. No additional network service is required.
+
+`moonData()` estimates the lunar phase from a known new-moon epoch and the mean 29.53058867-day synodic month. The phase label and illumination percentage are approximate and intended for general weather-planning information rather than astronomical ephemeris work.
 
 `weatherPalette()` selects one of these palettes from current conditions and solar time:
 
@@ -159,6 +167,7 @@ The following keys are currently used:
 | --- | --- |
 | `wichita-weather-last-forecast-v1` | Last successful combined forecast object |
 | `wichita-weather-location-v1` | Active latitude, longitude, and display label |
+| `wichita-weather-favorites-v1` | Up to five saved location shortcuts |
 
 Storage values are read defensively through `readJSON()`. If a value is missing or malformed, the app falls back to safe defaults.
 
@@ -170,7 +179,7 @@ There are two separate caching mechanisms:
 
 ### Application shell
 
-`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v12`.
+`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v15`.
 
 For same-origin application files, the service worker uses a network-first strategy and falls back to its cache when the network fails. Activating a new worker removes older application-shell caches.
 
@@ -179,6 +188,10 @@ For same-origin application files, the service worker uses a network-first strat
 After every successful weather request, the combined forecast object is saved to `localStorage`. If a subsequent weather request fails, the saved forecast is rendered with a visible saved/offline message and its original retrieval time.
 
 Third-party map resources and live radar tiles are not cached by the service worker.
+
+## Refresh lifecycle
+
+Live requests use `cache: "no-store"` to avoid reusing an old browser response. The app checks freshness every five minutes, whenever the page becomes visible, and on the browser `pageshow` event. It refreshes when the last successful data is more than 15 minutes old or when the calendar date changes in the forecast location's NWS time zone. This keeps an installed PWA or long-lived browser tab from showing the previous day's period labels. The visible retrieval age updates once per minute; its tooltip preserves the exact local timestamp.
 
 ## Color and contrast
 
@@ -233,10 +246,14 @@ Test at minimum:
 - Mobile viewport around 390 × 844
 - Desktop viewport
 - Every weather-responsive palette, especially night and storm text contrast
-- Sunrise and sunset values for the selected location and time zone
+- Civil dawn, sunrise, sunset, civil dusk, and moon values for the selected location and time zone
+- Foreground, freshness, and local-date-change refresh behavior
 - Wichita first-run forecast
 - City search and ZIP-code search
 - Saved location after reload
+- Saving, loading, removing, and persisting favorite locations
+- Twelve-hour precipitation chart and observation detail values
+- Calendar dates on daily rows and relative retrieval-age updates
 - Device-location denial and success paths
 - Hourly horizontal scrolling
 - Daily row expansion
@@ -271,16 +288,36 @@ No API keys or secrets belong in this repository. If a future feature requires a
 Good candidates for future work include:
 
 - Temperature-unit preference
-- Saved multiple locations
 - Radar warning polygons
 - Radar animation with explicit frame controls
 - Air-quality or UV data from an authoritative source
-- More detailed observation data such as visibility, pressure, and dew point
 - Automated Playwright regression tests in the repository
 
 Before adding a weather-data source, document its ownership, update frequency, rate limits, attribution requirements, CORS behavior, and fallback behavior.
 
 ## Change log
+
+### 1.6.0 — 2026-09-30
+
+- Added calendar dates to daily forecast rows and a continuously updated relative retrieval age.
+- Added expandable dew point, visibility, barometric pressure, and wind-gust observations.
+- Added up to five persistent favorite-location shortcuts.
+- Added a compact 12-hour precipitation-probability chart.
+- Updated the service-worker cache to `wichita-weather-shell-v15`.
+
+### 1.5.1 — 2026-09-30
+
+- Hid NWS `Overnight` and prior-date nighttime carryover periods from the daily list after local midnight.
+- Kept overnight detail in the hourly forecast while making the daily list begin with the current calendar day.
+- Updated the service-worker cache to `wichita-weather-shell-v14`.
+
+### 1.5.0 — 2026-09-30
+
+- Added automatic refresh after a local date change, when returning to the app, and when live data is older than 15 minutes.
+- Disabled browser HTTP caching for live weather requests while retaining the explicit offline forecast fallback.
+- Moved solar information into a dedicated section near the bottom of the screen.
+- Added civil dawn, civil dusk, approximate moon phase, and illumination percentage.
+- Updated the service-worker cache to `wichita-weather-shell-v13`.
 
 ### 1.4.0 — 2026-09-28
 

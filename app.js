@@ -1,7 +1,14 @@
 const DEFAULT_LOCATION = { latitude: 37.6872, longitude: -97.3301, label: "Wichita, KS" };
 const CACHE_KEY = "wichita-weather-last-forecast-v1";
 const LOCATION_KEY = "wichita-weather-location-v1";
+const FAVORITES_KEY = "wichita-weather-favorites-v1";
 let activeLocation = readJSON(LOCATION_KEY) || DEFAULT_LOCATION;
+let favorites = readJSON(FAVORITES_KEY) || [];
+let lastRefreshAt = 0;
+let lastDateKey = "";
+let lastTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+let automaticRefreshRunning = false;
+let weatherRequestRunning = false;
 
 const $ = (selector) => document.querySelector(selector);
 const els = {
@@ -9,9 +16,12 @@ const els = {
   currentTemp: $("#currentTemp"), currentCondition: $("#currentCondition"),
   currentLabel: $("#currentLabel"), weatherMark: $("#weatherMark"),
   feelsLike: $("#feelsLike"), humidity: $("#humidity"), wind: $("#wind"),
-  sunrise: $("#sunriseTime"), sunset: $("#sunsetTime"),
-  hourly: $("#hourly"), daily: $("#daily"), updated: $("#updatedAt"),
-  connection: $("#connection"), officeInfo: $("#officeInfo"), searchResults: $("#searchResults")
+  dewPoint: $("#dewPoint"), visibility: $("#visibility"), pressure: $("#pressure"), windGust: $("#windGust"),
+  dawn: $("#dawnTime"), sunrise: $("#sunriseTime"), sunset: $("#sunsetTime"), dusk: $("#duskTime"),
+  astronomyDate: $("#astronomyDate"), moonPhase: $("#moonPhase"), moonIllumination: $("#moonIllumination"),
+  hourly: $("#hourly"), precipChart: $("#precipChart"), daily: $("#daily"), updated: $("#updatedAt"),
+  connection: $("#connection"), officeInfo: $("#officeInfo"), searchResults: $("#searchResults"),
+  favorites: $("#favorites"), saveLocation: $("#saveLocationBtn")
 };
 
 function readJSON(key) {
@@ -24,12 +34,60 @@ function setStatus(message = "", error = false) {
 }
 
 async function getJSON(url) {
-  const response = await fetch(url, { headers: { Accept: "application/geo+json" } });
+  const response = await fetch(url, { cache: "no-store", headers: { Accept: "application/geo+json" } });
   if (!response.ok) throw new Error(`Weather service returned ${response.status}`);
   return response.json();
 }
 
 function cToF(celsius) { return celsius == null ? null : Math.round((celsius * 9 / 5) + 32); }
+
+function speedToMph(quantity) {
+  if (quantity?.value == null) return null;
+  const unit = quantity.unitCode || "";
+  if (unit.includes("km_h")) return quantity.value * .621371;
+  if (unit.includes("m_s")) return quantity.value * 2.23694;
+  return quantity.value;
+}
+
+function sameLocation(a, b) {
+  return a && b && Math.abs(a.latitude - b.latitude) < .001 && Math.abs(a.longitude - b.longitude) < .001;
+}
+
+function renderFavorites() {
+  els.favorites.replaceChildren();
+  favorites.forEach(favorite => {
+    const group = document.createElement("span");
+    group.className = "favorite";
+    const load = document.createElement("button");
+    load.type = "button";
+    load.className = "favorite-load";
+    load.textContent = favorite.label;
+    load.addEventListener("click", () => loadWeather(favorite));
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "favorite-remove";
+    remove.setAttribute("aria-label", `Remove ${favorite.label} from saved locations`);
+    remove.textContent = "×";
+    remove.addEventListener("click", () => {
+      favorites = favorites.filter(item => !sameLocation(item, favorite));
+      localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+      renderFavorites();
+    });
+    group.append(load, remove);
+    els.favorites.append(group);
+  });
+  const saved = favorites.some(item => sameLocation(item, activeLocation));
+  els.saveLocation.textContent = saved ? "★ Saved" : "☆ Save location";
+  els.saveLocation.classList.toggle("saved", saved);
+}
+
+function updateAgeLabel() {
+  const timestamp = Number(els.updated.dataset.timestamp);
+  if (!timestamp) return;
+  const ageMinutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
+  const age = ageMinutes < 1 ? "just now" : ageMinutes < 60 ? `${ageMinutes} min ago` : `${Math.floor(ageMinutes / 60)} hr ago`;
+  els.updated.textContent = `${els.updated.dataset.cached === "true" ? "Saved" : "Updated"} ${age}`;
+}
 
 function feelsLike(tempF, humidity, windMph) {
   if (tempF == null) return null;
@@ -75,14 +133,32 @@ function solarTimes(date, latitude, longitude, timeZone) {
   const eqTime = 229.18 * (.000075 + .001868*Math.cos(gamma) - .032077*Math.sin(gamma) - .014615*Math.cos(2*gamma) - .040849*Math.sin(2*gamma));
   const decl = .006918 - .399912*Math.cos(gamma) + .070257*Math.sin(gamma) - .006758*Math.cos(2*gamma) + .000907*Math.sin(2*gamma) - .002697*Math.cos(3*gamma) + .00148*Math.sin(3*gamma);
   const latRad = latitude * Math.PI / 180;
-  const hourAngle = Math.acos(Math.cos(90.833 * Math.PI / 180) / (Math.cos(latRad) * Math.cos(decl)) - Math.tan(latRad) * Math.tan(decl));
-  if (!Number.isFinite(hourAngle)) return { sunrise: null, sunset: null };
-  const angleDegrees = hourAngle * 180 / Math.PI;
   const solarNoon = 720 - 4 * longitude - eqTime;
-  return {
-    sunrise: new Date(dayStart + (solarNoon - 4 * angleDegrees) * 60000),
-    sunset: new Date(dayStart + (solarNoon + 4 * angleDegrees) * 60000)
+  const eventTime = (zenith, morning) => {
+    const angle = Math.acos(Math.cos(zenith * Math.PI / 180) / (Math.cos(latRad) * Math.cos(decl)) - Math.tan(latRad) * Math.tan(decl));
+    if (!Number.isFinite(angle)) return null;
+    const minutes = solarNoon + (morning ? -1 : 1) * 4 * angle * 180 / Math.PI;
+    return new Date(dayStart + minutes * 60000);
   };
+  return {
+    dawn: eventTime(96, true),
+    sunrise: eventTime(90.833, true),
+    sunset: eventTime(90.833, false),
+    dusk: eventTime(96, false)
+  };
+}
+
+function moonData(date) {
+  const synodicMonth = 29.53058867;
+  const knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
+  const age = (((date.getTime() - knownNewMoon) / 86400000) % synodicMonth + synodicMonth) % synodicMonth;
+  const phase = age / synodicMonth;
+  const names = ["New Moon", "Waxing Crescent", "First Quarter", "Waxing Gibbous", "Full Moon", "Waning Gibbous", "Last Quarter", "Waning Crescent"];
+  return { name: names[Math.floor((phase + 1/16) * 8) % 8], illumination: Math.round((1 - Math.cos(2 * Math.PI * phase)) * 50) };
+}
+
+function localDateKey(date, timeZone) {
+  return new Intl.DateTimeFormat("en-CA", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
 }
 
 function weatherPalette(condition, solar, now = new Date()) {
@@ -129,12 +205,16 @@ function render(data, cached = false) {
   const obs = observation?.properties;
   const temp = cToF(obs?.temperature?.value) ?? firstHour.temperature;
   const humidity = Math.round(obs?.relativeHumidity?.value ?? 0);
-  const windMph = obs?.windSpeed?.value == null ? Number.parseInt(firstHour.windSpeed) || 0 : Math.round(obs.windSpeed.value * .621371);
+  const windMph = Math.round(speedToMph(obs?.windSpeed) ?? Number.parseInt(firstHour.windSpeed) ?? 0);
   const condition = obs?.textDescription || firstHour.shortForecast;
   const coordinates = data.location || activeLocation;
+  activeLocation = { latitude: coordinates.latitude, longitude: coordinates.longitude, label };
+  updateRadarLink(activeLocation);
+  renderFavorites();
   const timeZone = data.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const solar = solarTimes(new Date(), coordinates.latitude, coordinates.longitude, timeZone);
   const timeFormatter = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit", timeZone });
+  const moon = moonData(new Date());
   applyWeatherPalette(condition, solar);
   els.currentTemp.textContent = temp ?? "--";
   els.currentCondition.textContent = condition;
@@ -143,8 +223,19 @@ function render(data, cached = false) {
   els.feelsLike.textContent = `${feelsLike(temp, humidity, windMph) ?? "--"}°`;
   els.humidity.textContent = obs?.relativeHumidity?.value == null ? "--" : `${humidity}%`;
   els.wind.textContent = obs?.windDirection?.value == null ? firstHour.windSpeed : `${firstHour.windDirection} ${windMph} mph`;
-  els.sunrise.textContent = solar.sunrise ? timeFormatter.format(solar.sunrise) : "Unavailable";
-  els.sunset.textContent = solar.sunset ? timeFormatter.format(solar.sunset) : "Unavailable";
+  els.dewPoint.textContent = obs?.dewpoint?.value == null ? "--" : `${cToF(obs.dewpoint.value)}°`;
+  els.visibility.textContent = obs?.visibility?.value == null ? "--" : `${(obs.visibility.value / 1609.344).toFixed(1)} mi`;
+  els.pressure.textContent = obs?.barometricPressure?.value == null ? "--" : `${(obs.barometricPressure.value / 3386.389).toFixed(2)} inHg`;
+  const gustMph = speedToMph(obs?.windGust);
+  els.windGust.textContent = gustMph == null ? "None reported" : `${Math.round(gustMph)} mph`;
+  const displaySolarTime = value => value ? timeFormatter.format(value) : "Unavailable";
+  els.dawn.textContent = displaySolarTime(solar.dawn);
+  els.sunrise.textContent = displaySolarTime(solar.sunrise);
+  els.sunset.textContent = displaySolarTime(solar.sunset);
+  els.dusk.textContent = displaySolarTime(solar.dusk);
+  els.astronomyDate.textContent = new Intl.DateTimeFormat([], { timeZone, weekday: "short", month: "short", day: "numeric" }).format(new Date());
+  els.moonPhase.textContent = moon.name;
+  els.moonIllumination.textContent = `${moon.illumination}% illuminated`;
 
   els.hourly.innerHTML = hourly.properties.periods.slice(0, 24).map((period, index) => `
     <article class="hour">
@@ -154,23 +245,31 @@ function render(data, cached = false) {
       <small>${probability(period)}</small>
     </article>`).join("");
 
+  els.precipChart.innerHTML = hourly.properties.periods.slice(0, 12).map((period, index) => {
+    const chance = Math.round(period.probabilityOfPrecipitation?.value ?? 0);
+    const hour = index === 0 ? "Now" : index % 3 === 0 ? new Intl.DateTimeFormat([], { hour: "numeric", timeZone }).format(new Date(period.startTime)) : "";
+    return `<div class="precip-column" title="${period.shortForecast}: ${chance}% chance of precipitation"><span class="precip-bar" style="height:${Math.max(2, chance * .42)}px"></span><small>${hour}</small></div>`;
+  }).join("");
+
   const periods = daily.properties.periods;
   const rows = [];
   for (let i = 0; i < periods.length; i += 1) {
     const day = periods[i];
     const night = day.isDaytime ? periods[i + 1] : day;
     if (!day.isDaytime && i === 0) {
-      rows.push({ name: "Tonight", summary: day.shortForecast, symbol: symbolFor(day.shortForecast, false), high: null, low: day.temperature });
+      const carriesOverFromYesterday = localDateKey(new Date(day.startTime), timeZone) !== localDateKey(new Date(), timeZone);
+      if (carriesOverFromYesterday || /^overnight$/i.test(day.name)) continue;
+      rows.push({ name: day.name || "Tonight", startTime: day.startTime, summary: day.shortForecast, symbol: symbolFor(day.shortForecast, false), high: null, low: day.temperature });
       continue;
     }
     if (!day.isDaytime) continue;
-    rows.push({ name: day.name, summary: day.shortForecast, symbol: symbolFor(day.shortForecast, true), high: day.temperature, low: night && !night.isDaytime ? night.temperature : null });
+    rows.push({ name: day.name, startTime: day.startTime, summary: day.shortForecast, symbol: symbolFor(day.shortForecast, true), high: day.temperature, low: night && !night.isDaytime ? night.temperature : null });
   }
   els.daily.innerHTML = rows.slice(0, 7).map(day => {
     const source = periods.find(period => period.name === day.name) || periods[0];
     return `<details class="day">
       <summary aria-label="Show details for ${day.name}">
-        <div class="day-name">${day.name}<small>${day.summary}</small></div>
+        <div class="day-name">${day.name}<span class="day-date">${new Intl.DateTimeFormat([], { month: "short", day: "numeric", timeZone }).format(new Date(day.startTime))}</span><small>${day.summary}</small></div>
         <div class="day-symbol">${weatherIcon(day.symbol, day.summary)}</div>
         <div class="temps">${day.high == null ? "" : `${day.high}°`}<span>${day.low == null ? "" : `${day.low}°`}</span></div>
         <span class="day-chevron" aria-hidden="true">⌄</span>
@@ -186,12 +285,17 @@ function render(data, cached = false) {
   }).join("");
 
   renderAlerts(alerts.features || []);
-  const time = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" }).format(new Date(savedAt));
-  els.updated.textContent = `${cached ? "Saved forecast" : "Updated"} ${time}`;
+  els.updated.dataset.timestamp = String(new Date(savedAt).getTime());
+  els.updated.dataset.cached = String(cached);
+  els.updated.title = `Retrieved ${new Date(savedAt).toLocaleString()}`;
+  updateAgeLabel();
   els.officeInfo.innerHTML = office?.url
     ? `Issued by <a href="${office.url}" target="_blank" rel="noreferrer">${office.name}</a>. Last retrieved ${new Date(savedAt).toLocaleString()}.`
     : `Last retrieved ${new Date(savedAt).toLocaleString()}.`;
   els.connection.hidden = !cached && navigator.onLine;
+  lastTimeZone = timeZone;
+  lastDateKey = localDateKey(new Date(), timeZone);
+  lastRefreshAt = new Date(savedAt).getTime();
   setStatus(cached ? "Showing the last saved forecast. Refresh when connected." : "");
 }
 
@@ -209,6 +313,7 @@ function renderAlerts(features) {
 }
 
 async function loadWeather(location = activeLocation) {
+  weatherRequestRunning = true;
   activeLocation = location;
   updateRadarLink(location);
   setStatus("Loading the latest forecast…");
@@ -217,6 +322,9 @@ async function loadWeather(location = activeLocation) {
     const point = await getJSON(`https://api.weather.gov/points/${coords}`);
     const p = point.properties;
     const label = location.label || [p.relativeLocation?.properties?.city, p.relativeLocation?.properties?.state].filter(Boolean).join(", ") || "Your location";
+    activeLocation = { latitude: location.latitude, longitude: location.longitude, label };
+    updateRadarLink(activeLocation);
+    renderFavorites();
     const [hourly, daily, alerts, stations] = await Promise.all([
       getJSON(p.forecastHourly), getJSON(p.forecast),
       getJSON(`https://api.weather.gov/alerts/active?point=${coords}`),
@@ -251,6 +359,8 @@ async function loadWeather(location = activeLocation) {
       els.status.querySelector("button")?.addEventListener("click", () => loadWeather());
     }
     console.error(error);
+  } finally {
+    weatherRequestRunning = false;
   }
 }
 
@@ -264,6 +374,13 @@ $("#locateBtn").addEventListener("click", () => {
   );
 });
 $("#refreshBtn").addEventListener("click", () => loadWeather(activeLocation));
+els.saveLocation.addEventListener("click", () => {
+  const index = favorites.findIndex(item => sameLocation(item, activeLocation));
+  if (index >= 0) favorites.splice(index, 1);
+  else favorites = [{ ...activeLocation }, ...favorites].slice(0, 5);
+  localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+  renderFavorites();
+});
 
 $("#searchForm").addEventListener("submit", async event => {
   event.preventDefault();
@@ -303,11 +420,26 @@ function updateConnection() {
   els.connection.hidden = navigator.onLine;
   if (navigator.onLine && els.status.textContent.includes("saved forecast")) loadWeather(activeLocation);
 }
+
+async function maybeAutoRefresh() {
+  if (document.hidden || automaticRefreshRunning || weatherRequestRunning) return;
+  const now = new Date();
+  const newLocalDay = localDateKey(now, lastTimeZone) !== lastDateKey;
+  const stale = !lastRefreshAt || now.getTime() - lastRefreshAt > 15 * 60000;
+  if (!newLocalDay && !stale) return;
+  automaticRefreshRunning = true;
+  try { await loadWeather(activeLocation); } finally { automaticRefreshRunning = false; }
+}
 window.addEventListener("online", updateConnection);
 window.addEventListener("offline", updateConnection);
+window.addEventListener("pageshow", maybeAutoRefresh);
+document.addEventListener("visibilitychange", maybeAutoRefresh);
+setInterval(maybeAutoRefresh, 5 * 60000);
+setInterval(updateAgeLabel, 60000);
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js");
 localStorage.removeItem("wichita-weather-theme-v1");
 updateConnection();
 updateRadarLink(activeLocation);
+renderFavorites();
 loadWeather(activeLocation);
