@@ -2,6 +2,7 @@ const DEFAULT_LOCATION = { latitude: 37.6872, longitude: -97.3301, label: "Wichi
 const CACHE_KEY = "wichita-weather-last-forecast-v1";
 const LOCATION_KEY = "wichita-weather-location-v1";
 const FAVORITES_KEY = "wichita-weather-favorites-v1";
+const CONDITIONS_KEY = "wichita-weather-conditions-open-v1";
 let activeLocation = readJSON(LOCATION_KEY) || DEFAULT_LOCATION;
 let favorites = readJSON(FAVORITES_KEY) || [];
 let lastRefreshAt = 0;
@@ -21,7 +22,8 @@ const els = {
   astronomyDate: $("#astronomyDate"), moonPhase: $("#moonPhase"), moonIllumination: $("#moonIllumination"),
   hourly: $("#hourly"), precipChart: $("#precipChart"), daily: $("#daily"), updated: $("#updatedAt"),
   connection: $("#connection"), officeInfo: $("#officeInfo"), searchResults: $("#searchResults"),
-  favorites: $("#favorites"), saveLocation: $("#saveLocationBtn")
+  favorites: $("#favorites"), saveLocation: $("#saveLocationBtn"),
+  moreConditions: $(".more-conditions"), hourlyCue: $("#hourlyCue"), refresh: $("#refreshBtn")
 };
 
 function readJSON(key) {
@@ -85,8 +87,27 @@ function updateAgeLabel() {
   const timestamp = Number(els.updated.dataset.timestamp);
   if (!timestamp) return;
   const ageMinutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
-  const age = ageMinutes < 1 ? "just now" : ageMinutes < 60 ? `${ageMinutes} min ago` : `${Math.floor(ageMinutes / 60)} hr ago`;
+  const retrieved = new Date(timestamp);
+  const dayDifference = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(retrieved).setHours(0, 0, 0, 0)) / 86400000);
+  const clock = new Intl.DateTimeFormat([], { hour: "numeric", minute: "2-digit" }).format(retrieved);
+  const age = ageMinutes < 1 ? "just now"
+    : ageMinutes < 60 ? `${ageMinutes} min ago`
+    : ageMinutes < 360 ? `${Math.floor(ageMinutes / 60)} hr ago`
+    : dayDifference === 1 ? `yesterday at ${clock}`
+    : `at ${clock}`;
   els.updated.textContent = `${els.updated.dataset.cached === "true" ? "Saved" : "Updated"} ${age}`;
+}
+
+function compactHour(date, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: true, timeZone }).formatToParts(date);
+  const hour = parts.find(part => part.type === "hour")?.value || "";
+  const period = parts.find(part => part.type === "dayPeriod")?.value?.[0]?.toLowerCase() || "";
+  return `${hour}${period}`;
+}
+
+function updateHourlyCue() {
+  const remaining = els.hourly.scrollWidth - els.hourly.clientWidth - els.hourly.scrollLeft;
+  els.hourlyCue.hidden = remaining < 8;
 }
 
 function feelsLike(tempF, humidity, windMph) {
@@ -247,9 +268,11 @@ function render(data, cached = false) {
 
   els.precipChart.innerHTML = hourly.properties.periods.slice(0, 12).map((period, index) => {
     const chance = Math.round(period.probabilityOfPrecipitation?.value ?? 0);
-    const hour = index === 0 ? "Now" : index % 3 === 0 ? new Intl.DateTimeFormat([], { hour: "numeric", timeZone }).format(new Date(period.startTime)) : "";
-    return `<div class="precip-column" title="${period.shortForecast}: ${chance}% chance of precipitation"><span class="precip-bar" style="height:${Math.max(2, chance * .42)}px"></span><small>${hour}</small></div>`;
+    const hour = index === 0 ? "Now" : index % 3 === 0 ? compactHour(new Date(period.startTime), timeZone) : "";
+    const barHeight = Math.max(2, chance * .35);
+    return `<div class="precip-column" title="${period.shortForecast}: ${chance}% chance of precipitation" aria-label="${compactHour(new Date(period.startTime), timeZone)}, ${chance}% chance of precipitation"><span class="precip-meter" style="--bar:${barHeight}px"><span class="precip-value">${chance >= 20 ? `${chance}%` : ""}</span><span class="precip-bar"></span></span><small>${hour}</small></div>`;
   }).join("");
+  requestAnimationFrame(updateHourlyCue);
 
   const periods = daily.properties.periods;
   const rows = [];
@@ -314,6 +337,9 @@ function renderAlerts(features) {
 
 async function loadWeather(location = activeLocation) {
   weatherRequestRunning = true;
+  els.refresh.disabled = true;
+  els.refresh.setAttribute("aria-busy", "true");
+  els.refresh.textContent = "Refreshing…";
   activeLocation = location;
   updateRadarLink(location);
   setStatus("Loading the latest forecast…");
@@ -361,6 +387,9 @@ async function loadWeather(location = activeLocation) {
     console.error(error);
   } finally {
     weatherRequestRunning = false;
+    els.refresh.disabled = false;
+    els.refresh.removeAttribute("aria-busy");
+    els.refresh.textContent = "Refresh forecast";
   }
 }
 
@@ -373,7 +402,11 @@ $("#locateBtn").addEventListener("click", () => {
     { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
   );
 });
-$("#refreshBtn").addEventListener("click", () => loadWeather(activeLocation));
+els.refresh.addEventListener("click", () => loadWeather(activeLocation));
+els.moreConditions.open = localStorage.getItem(CONDITIONS_KEY) === "true";
+els.moreConditions.addEventListener("toggle", () => localStorage.setItem(CONDITIONS_KEY, String(els.moreConditions.open)));
+els.hourly.addEventListener("scroll", updateHourlyCue, { passive: true });
+window.addEventListener("resize", updateHourlyCue);
 els.saveLocation.addEventListener("click", () => {
   const index = favorites.findIndex(item => sameLocation(item, activeLocation));
   if (index >= 0) favorites.splice(index, 1);

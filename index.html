@@ -93,16 +93,18 @@
 
     <section class="section" aria-labelledby="hourlyTitle">
       <div class="section-heading">
-        <h2 id="hourlyTitle">Next 24 hours</h2>
+        <h2 id="hourlyTitle">Hourly forecast</h2>
         <span id="updatedAt"></span>
       </div>
       <p class="precip-label">Precipitation chance · next 12 hours</p>
       <div class="precip-chart" id="precipChart" aria-label="Precipitation chance for the next 12 hours"></div>
+      <p class="hourly-label">Temperature &amp; conditions · next 24 hours</p>
       <div class="hourly-track" id="hourly"></div>
+      <p class="swipe-cue" id="hourlyCue" aria-hidden="true">Swipe for more <span>→</span></p>
     </section>
 
     <section class="section" aria-labelledby="dailyTitle">
-      <div class="section-heading"><h2 id="dailyTitle">Seven-day forecast</h2></div>
+      <div class="section-heading"><h2 id="dailyTitle">Daily forecast</h2></div>
       <div class="daily-list" id="daily" aria-live="polite"></div>
     </section>
 
@@ -134,7 +136,7 @@
       </div>
     </details>
     <div class="bottom-row">
-      <p class="app-version" aria-label="Application version 1.6.0">v1.6.0</p>
+      <p class="app-version" aria-label="Application version 1.6.1">v1.6.1</p>
     </div>
   </main>
   <template id="alertTemplate">

@@ -77,6 +77,7 @@ h1 { margin: 0; font-size: clamp(1.55rem, 6vw, 2.2rem); letter-spacing: -.04em; 
 .status { display: flex; align-items: center; gap: 9px; margin: 5px 2px 14px; color: var(--muted); font-size: .88rem; }
 .status.error { color: var(--warning); }
 .inline-retry { margin-left: 5px; border: 0; padding: 0; color: inherit; background: transparent; font-weight: 800; text-decoration: underline; cursor: pointer; }
+button:disabled { cursor: wait; opacity: .68; }
 .status:empty { display: none; }
 .spinner { width: 15px; height: 15px; border: 2px solid var(--line); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -106,10 +107,16 @@ h2 { margin: 0; font-size: 1.1rem; letter-spacing: -.02em; }
 .precip-label { margin: 0 3px 6px; color: var(--muted); font-size: .68rem; font-weight: 650; }
 .precip-chart { display: grid; grid-template-columns: repeat(12, 1fr); align-items: end; gap: 3px; height: 74px; margin-bottom: 10px; padding: 8px 8px 5px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
 .precip-column { display: grid; grid-template-rows: 45px 12px; align-items: end; min-width: 0; text-align: center; }
-.precip-bar { width: min(13px, 80%); min-height: 2px; margin: auto; border-radius: 6px 6px 2px 2px; background: var(--blue); opacity: .78; }
-.precip-column small { overflow: hidden; color: var(--muted); font-size: .55rem; white-space: nowrap; }
+.precip-meter { position: relative; width: 100%; height: 45px; }
+.precip-bar { position: absolute; bottom: 0; left: 50%; width: min(13px, 80%); min-height: 2px; height: var(--bar); border-radius: 6px 6px 2px 2px; background: var(--blue); opacity: .78; transform: translateX(-50%); }
+.precip-value { position: absolute; bottom: calc(var(--bar) + 2px); left: 50%; color: var(--blue); font-size: .5rem; font-weight: 750; transform: translateX(-50%); white-space: nowrap; }
+.precip-column small { overflow: visible; color: var(--muted); font-size: .56rem; white-space: nowrap; }
+.hourly-label { margin: 12px 3px 7px; color: var(--muted); font-size: .68rem; font-weight: 650; }
 .hourly-track { display: grid; width: 100%; max-width: 100%; min-width: 0; grid-auto-flow: column; grid-auto-columns: 83px; gap: 9px; overflow-x: auto; overflow-y: hidden; overscroll-behavior-inline: contain; contain: layout paint; padding: 2px 2px 10px; scroll-snap-type: x proximity; scrollbar-width: none; }
 .hourly-track::-webkit-scrollbar { display: none; }
+.swipe-cue { margin: -3px 3px 0; color: var(--muted); font-size: .65rem; text-align: right; transition: opacity .2s; }
+.swipe-cue[hidden] { display: none; }
+.swipe-cue span { color: var(--blue); }
 .hour { scroll-snap-align: start; padding: 13px 8px; text-align: center; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); }
 .hour time, .hour small { display: block; color: var(--muted); font-size: .72rem; }
 .hour .symbol { display: grid; place-items: center; margin: 8px 0; color: var(--ink); font-size: 1.85rem; }
@@ -122,7 +129,7 @@ h2 { margin: 0; font-size: 1.1rem; letter-spacing: -.02em; }
 .day summary::-webkit-details-marker { display: none; }
 .day summary:focus-visible { outline: 3px solid var(--blue); outline-offset: -3px; }
 .day-name { font-weight: 700; }
-.day-date { margin-left: 6px; color: var(--muted); font-size: .68rem; font-weight: 600; }
+.day-date { margin-left: 6px; color: var(--muted); font-size: .68rem; font-weight: 600; white-space: nowrap; }
 .day-name small { display: block; margin-top: 2px; color: var(--muted); font-size: .7rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .day-symbol { display: grid; place-items: center; color: var(--ink); font-size: 1.65rem; }
 .temps { text-align: right; font-size: .92rem; }

@@ -4,7 +4,7 @@ This is the living technical guide for Wichita Weather. Update it whenever behav
 
 ## Project status
 
-- Current version: **1.6.0**
+- Current version: **1.6.1**
 - Architecture: static client-side Progressive Web App (PWA)
 - Default location: Wichita, Kansas (`37.6872, -97.3301`)
 - Build system: none
@@ -168,6 +168,7 @@ The following keys are currently used:
 | `wichita-weather-last-forecast-v1` | Last successful combined forecast object |
 | `wichita-weather-location-v1` | Active latitude, longitude, and display label |
 | `wichita-weather-favorites-v1` | Up to five saved location shortcuts |
+| `wichita-weather-conditions-open-v1` | Whether the More conditions panel was left expanded |
 
 Storage values are read defensively through `readJSON()`. If a value is missing or malformed, the app falls back to safe defaults.
 
@@ -179,7 +180,7 @@ There are two separate caching mechanisms:
 
 ### Application shell
 
-`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v15`.
+`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v16`.
 
 For same-origin application files, the service worker uses a network-first strategy and falls back to its cache when the network fails. Activating a new worker removes older application-shell caches.
 
@@ -296,6 +297,15 @@ Good candidates for future work include:
 Before adding a weather-data source, document its ownership, update frequency, rate limits, attribution requirements, CORS behavior, and fallback behavior.
 
 ## Change log
+
+### 1.6.1 — 2026-10-01
+
+- Clarified the hourly section with separate 12-hour precipitation and 24-hour conditions labels.
+- Shortened precipitation time labels, added meaningful percentages, and retained all 12 data bars.
+- Added an overflow-aware swipe cue to the hourly cards.
+- Remembered the expanded state of More conditions and added refresh-button progress feedback.
+- Improved older retrieval timestamps and renamed the variable-length daily section.
+- Updated the service-worker cache to `wichita-weather-shell-v16`.
 
 ### 1.6.0 — 2026-09-30
 
