@@ -1,6 +1,6 @@
 # Wichita Weather
 
-Current app version: **1.6.1**
+Current app version: **1.6.2**
 
 A mobile-first, installable weather app using official forecast, observation, and alert data from the U.S. National Weather Service. Wichita, Kansas is the first-run default, and users can search for another U.S. city or ZIP code or use their device location.
 

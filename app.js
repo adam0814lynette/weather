@@ -268,9 +268,10 @@ function render(data, cached = false) {
 
   els.precipChart.innerHTML = hourly.properties.periods.slice(0, 12).map((period, index) => {
     const chance = Math.round(period.probabilityOfPrecipitation?.value ?? 0);
-    const hour = index === 0 ? "Now" : index % 3 === 0 ? compactHour(new Date(period.startTime), timeZone) : "";
+    const showLabel = index % 3 === 0;
+    const hour = index === 0 ? "Now" : showLabel ? compactHour(new Date(period.startTime), timeZone) : "";
     const barHeight = Math.max(2, chance * .35);
-    return `<div class="precip-column" title="${period.shortForecast}: ${chance}% chance of precipitation" aria-label="${compactHour(new Date(period.startTime), timeZone)}, ${chance}% chance of precipitation"><span class="precip-meter" style="--bar:${barHeight}px"><span class="precip-value">${chance >= 20 ? `${chance}%` : ""}</span><span class="precip-bar"></span></span><small>${hour}</small></div>`;
+    return `<div class="precip-column${showLabel ? " labeled" : ""}" title="${period.shortForecast}: ${chance}% chance of precipitation" aria-label="${compactHour(new Date(period.startTime), timeZone)}, ${chance}% chance of precipitation"><span class="precip-meter" style="--bar:${barHeight}px"><span class="precip-value">${showLabel ? `${chance}%` : ""}</span><span class="precip-bar"></span></span><small>${hour}</small></div>`;
   }).join("");
   requestAnimationFrame(updateHourlyCue);
 
