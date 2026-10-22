@@ -3,6 +3,7 @@ const CACHE_KEY = "wichita-weather-last-forecast-v1";
 const LOCATION_KEY = "wichita-weather-location-v1";
 const FAVORITES_KEY = "wichita-weather-favorites-v1";
 const CONDITIONS_KEY = "wichita-weather-conditions-open-v1";
+const MAX_OBSERVATION_AGE = 2 * 60 * 60 * 1000;
 let activeLocation = readJSON(LOCATION_KEY) || DEFAULT_LOCATION;
 let favorites = readJSON(FAVORITES_KEY) || [];
 let lastRefreshAt = 0;
@@ -39,6 +40,19 @@ async function getJSON(url) {
   const response = await fetch(url, { cache: "no-store", headers: { Accept: "application/geo+json" } });
   if (!response.ok) throw new Error(`Weather service returned ${response.status}`);
   return response.json();
+}
+
+async function getFreshObservation(stations) {
+  const candidates = (stations.features || []).slice(0, 5);
+  const results = await Promise.allSettled(candidates.map(station => getJSON(`${station.id}/observations/latest`)));
+  const now = Date.now();
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    const properties = result.value?.properties;
+    const timestamp = new Date(properties?.timestamp).getTime();
+    if (properties?.temperature?.value != null && Number.isFinite(timestamp) && now - timestamp <= MAX_OBSERVATION_AGE) return result.value;
+  }
+  return null;
 }
 
 function cToF(celsius) { return celsius == null ? null : Math.round((celsius * 9 / 5) + 32); }
@@ -239,7 +253,10 @@ function render(data, cached = false) {
   applyWeatherPalette(condition, solar);
   els.currentTemp.textContent = temp ?? "--";
   els.currentCondition.textContent = condition;
-  els.currentLabel.textContent = obs ? "Current conditions" : "Current forecast";
+  els.currentLabel.textContent = obs ? "Current conditions" : "Current forecast estimate";
+  els.currentLabel.title = obs?.timestamp
+    ? `${obs.stationName || "NWS station"}, observed ${new Date(obs.timestamp).toLocaleString()}`
+    : "Nearby station observations are unavailable or more than two hours old";
   els.weatherMark.innerHTML = weatherIcon(symbolFor(condition, firstHour.isDaytime));
   els.feelsLike.textContent = `${feelsLike(temp, humidity, windMph) ?? "--"}°`;
   els.humidity.textContent = obs?.relativeHumidity?.value == null ? "--" : `${humidity}%`;
@@ -357,11 +374,7 @@ async function loadWeather(location = activeLocation) {
       getJSON(`https://api.weather.gov/alerts/active?point=${coords}`),
       getJSON(p.observationStations)
     ]);
-    let observation = null;
-    const stationUrl = stations.features?.[0]?.id;
-    if (stationUrl) {
-      try { observation = await getJSON(`${stationUrl}/observations/latest`); } catch (_) { /* forecast fallback */ }
-    }
+    const observation = await getFreshObservation(stations);
     let office = null;
     if (p.forecastOffice) {
       try {

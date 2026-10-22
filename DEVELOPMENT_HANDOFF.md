@@ -4,7 +4,7 @@ This is the living technical guide for Wichita Weather. Update it whenever behav
 
 ## Project status
 
-- Current version: **1.6.2**
+- Current version: **1.6.3**
 - Architecture: static client-side Progressive Web App (PWA)
 - Default location: Wichita, Kansas (`37.6872, -97.3301`)
 - Build system: none
@@ -68,13 +68,13 @@ Open `http://localhost:8000`.
 1. Call `https://api.weather.gov/points/{latitude},{longitude}`.
 2. Read the returned URLs for the hourly forecast, daily forecast, observation stations, and issuing forecast office.
 3. Request hourly forecast, daily forecast, active alerts, and observation-station data concurrently.
-4. Request the latest observation from the first available station.
+4. Request observations from up to five nearby stations and use the nearest report no more than two hours old.
 5. Request forecast-office information when available.
 6. Combine the responses into one local object.
 7. Save the successful result to `localStorage`.
 8. Render current and extended observations, precipitation chart, hourly cards, dated daily details, alerts, relative data age, and forecast-office information.
 
-If current observations are unavailable, the current-conditions card falls back to the first hourly forecast period.
+If nearby observations are unavailable or more than two hours old, the current-conditions card falls back to the first hourly forecast period and labels the value as a forecast estimate. This prevents a stalled station's technically “latest” report from appearing current all day.
 
 ### NWS endpoints in use
 
@@ -109,7 +109,7 @@ When the location changes:
 
 ### Current conditions
 
-The current card uses the latest station observation when possible. Temperature values from station observations are converted from Celsius to Fahrenheit. Heat index or wind chill is calculated locally when conditions meet the applicable thresholds; otherwise the displayed feels-like value is the air temperature.
+The current card uses the nearest fresh station observation when possible. `getFreshObservation()` checks up to five stations in distance order and rejects reports older than `MAX_OBSERVATION_AGE` (currently two hours). Temperature values from station observations are converted from Celsius to Fahrenheit. Heat index or wind chill is calculated locally when conditions meet the applicable thresholds; otherwise the displayed feels-like value is the air temperature.
 
 The expandable More conditions panel displays dew point, visibility, barometric pressure, and reported wind gusts. Missing station measurements are labeled clearly rather than inferred from forecast data.
 
@@ -180,7 +180,7 @@ There are two separate caching mechanisms:
 
 ### Application shell
 
-`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v17`.
+`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v18`.
 
 For same-origin application files, the service worker uses a network-first strategy and falls back to its cache when the network fails. Activating a new worker removes older application-shell caches.
 
@@ -297,6 +297,13 @@ Good candidates for future work include:
 Before adding a weather-data source, document its ownership, update frequency, rate limits, attribution requirements, CORS behavior, and fallback behavior.
 
 ## Change log
+
+### 1.6.3 — 2026-10-22
+
+- Rejected NWS station observations older than two hours instead of treating a stale `/latest` response as current.
+- Checked up to five nearby stations in distance order before falling back to the current hourly forecast.
+- Clearly labeled forecast-derived current temperatures as estimates.
+- Updated the service-worker cache to `wichita-weather-shell-v18`.
 
 ### 1.6.2 — 2026-10-01
 
