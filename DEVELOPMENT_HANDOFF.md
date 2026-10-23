@@ -4,7 +4,7 @@ This is the living technical guide for Wichita Weather. Update it whenever behav
 
 ## Project status
 
-- Current version: **1.6.3**
+- Current version: **1.7.0**
 - Architecture: static client-side Progressive Web App (PWA)
 - Default location: Wichita, Kansas (`37.6872, -97.3301`)
 - Build system: none
@@ -12,6 +12,7 @@ This is the living technical guide for Wichita Weather. Update it whenever behav
 - Intended hosting: GitHub Pages or any static HTTPS server
 - Primary weather source: U.S. National Weather Service
 - Radar: external link to the official NWS radar viewer
+- Pollen: external location-aware link to Pollen.com
 - Location-search source: Open-Meteo Geocoding API
 
 ## Development approach
@@ -103,6 +104,7 @@ When the location changes:
 - The location is saved locally.
 - Weather data is reloaded.
 - The official radar link updates to the selected coordinates.
+- The Pollen.com link updates to a representative ZIP code for the selected location.
 - The Refresh button continues to use the active location.
 
 ## Rendering behavior
@@ -159,6 +161,12 @@ Embedded radar is currently deferred. Earlier versions combined NOAA's public MR
 
 If embedded radar is revisited, use a basemap provider with explicit terms for the expected traffic and a supported authentication method. Do not place a private API key directly in this static client.
 
+## Pollen link
+
+The app does not copy or embed Pollen.com forecast data. `updatePollenLink()` creates a direct link in the form `https://www.pollen.com/forecast/current/pollen/{ZIP}`. Wichita defaults to `67202`. Search results reuse the selected ZIP when one was entered or the first representative postal code returned by Open-Meteo. GPS and older saved locations use `resolvePostalCode()` to obtain a nearby representative ZIP from the city returned by the NWS point metadata. If resolution fails, the action safely links to the Pollen.com home page.
+
+Postal codes are retained with the active and favorite location records so repeat visits do not require another lookup. Pollen conditions cover broad areas, so the linked ZIP is an area reference rather than a claim of address-level precision.
+
 ## Local browser storage
 
 The following keys are currently used:
@@ -166,8 +174,8 @@ The following keys are currently used:
 | Key | Stored value |
 | --- | --- |
 | `wichita-weather-last-forecast-v1` | Last successful combined forecast object |
-| `wichita-weather-location-v1` | Active latitude, longitude, and display label |
-| `wichita-weather-favorites-v1` | Up to five saved location shortcuts |
+| `wichita-weather-location-v1` | Active latitude, longitude, display label, and representative postal code |
+| `wichita-weather-favorites-v1` | Up to five saved location shortcuts, including resolved postal codes |
 | `wichita-weather-conditions-open-v1` | Whether the More conditions panel was left expanded |
 
 Storage values are read defensively through `readJSON()`. If a value is missing or malformed, the app falls back to safe defaults.
@@ -180,7 +188,7 @@ There are two separate caching mechanisms:
 
 ### Application shell
 
-`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v18`.
+`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v19`.
 
 For same-origin application files, the service worker uses a network-first strategy and falls back to its cache when the network fails. Activating a new worker removes older application-shell caches.
 
@@ -260,6 +268,7 @@ Test at minimum:
 - Daily row expansion
 - Active alert expansion when alerts are available
 - Official NWS radar link
+- Pollen.com link for Wichita, a city search, an exact ZIP search, and a GPS-style location
 - Offline reload with a previously saved forecast
 - Complete first load with no saved forecast and no network
 - Keyboard navigation and visible focus
@@ -297,6 +306,13 @@ Good candidates for future work include:
 Before adding a weather-data source, document its ownership, update frequency, rate limits, attribution requirements, CORS behavior, and fallback behavior.
 
 ## Change log
+
+### 1.7.0 — 2026-10-23
+
+- Added a prominent location-aware link to current and five-day pollen information on Pollen.com.
+- Added representative ZIP resolution for city searches, device locations, and older saved locations.
+- Stored resolved ZIP codes with active and favorite locations and added a safe Pollen.com fallback.
+- Updated privacy text, documentation, and the service-worker cache to `wichita-weather-shell-v19`.
 
 ### 1.6.3 — 2026-10-22
 

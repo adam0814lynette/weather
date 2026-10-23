@@ -1,4 +1,4 @@
-const DEFAULT_LOCATION = { latitude: 37.6872, longitude: -97.3301, label: "Wichita, KS" };
+const DEFAULT_LOCATION = { latitude: 37.6872, longitude: -97.3301, label: "Wichita, KS", postalCode: "67202" };
 const CACHE_KEY = "wichita-weather-last-forecast-v1";
 const LOCATION_KEY = "wichita-weather-location-v1";
 const FAVORITES_KEY = "wichita-weather-favorites-v1";
@@ -233,6 +233,33 @@ function updateRadarLink(location) {
   $("#radarLocation").textContent = `Regional view centered on ${location.label || "your location"}`;
 }
 
+function updatePollenLink(location) {
+  const postalCode = /^\d{5}$/.test(location.postalCode || "") ? location.postalCode : null;
+  $("#pollenLink").href = postalCode
+    ? `https://www.pollen.com/forecast/current/pollen/${postalCode}`
+    : "https://www.pollen.com/";
+  $("#pollenLocation").textContent = postalCode
+    ? `Current and 5-day outlook for ${location.label || postalCode}`
+    : `Find pollen information for ${location.label || "your location"}`;
+}
+
+async function resolvePostalCode(location, city, state) {
+  if (/^\d{5}$/.test(location.postalCode || "")) return location.postalCode;
+  const query = city || location.label?.split(",")[0];
+  if (!query) return null;
+  try {
+    const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=10&language=en&format=json&countryCode=US`);
+    if (!response.ok) return null;
+    const results = (await response.json()).results || [];
+    const stateMatches = results.filter(place => !state || place.admin1 === state || place.admin1 === location.label?.split(",")[1]?.trim());
+    const candidates = (stateMatches.length ? stateMatches : results).filter(place => place.postcodes?.length);
+    candidates.sort((a, b) => Math.hypot(a.latitude - location.latitude, a.longitude - location.longitude) - Math.hypot(b.latitude - location.latitude, b.longitude - location.longitude));
+    return candidates[0]?.postcodes?.[0] || null;
+  } catch (_) {
+    return null;
+  }
+}
+
 function render(data, cached = false) {
   const { label, observation, hourly, daily, alerts, savedAt, office } = data;
   els.location.textContent = label;
@@ -243,8 +270,9 @@ function render(data, cached = false) {
   const windMph = Math.round(speedToMph(obs?.windSpeed) ?? Number.parseInt(firstHour.windSpeed) ?? 0);
   const condition = obs?.textDescription || firstHour.shortForecast;
   const coordinates = data.location || activeLocation;
-  activeLocation = { latitude: coordinates.latitude, longitude: coordinates.longitude, label };
+  activeLocation = { latitude: coordinates.latitude, longitude: coordinates.longitude, label, postalCode: coordinates.postalCode || activeLocation.postalCode };
   updateRadarLink(activeLocation);
+  updatePollenLink(activeLocation);
   renderFavorites();
   const timeZone = data.timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone;
   const solar = solarTimes(new Date(), coordinates.latitude, coordinates.longitude, timeZone);
@@ -360,20 +388,29 @@ async function loadWeather(location = activeLocation) {
   els.refresh.textContent = "Refreshing…";
   activeLocation = location;
   updateRadarLink(location);
+  updatePollenLink(location);
   setStatus("Loading the latest forecast…");
   try {
     const coords = `${location.latitude.toFixed(4)},${location.longitude.toFixed(4)}`;
     const point = await getJSON(`https://api.weather.gov/points/${coords}`);
     const p = point.properties;
-    const label = location.label || [p.relativeLocation?.properties?.city, p.relativeLocation?.properties?.state].filter(Boolean).join(", ") || "Your location";
-    activeLocation = { latitude: location.latitude, longitude: location.longitude, label };
+    const relative = p.relativeLocation?.properties;
+    const label = location.label || [relative?.city, relative?.state].filter(Boolean).join(", ") || "Your location";
+    activeLocation = { latitude: location.latitude, longitude: location.longitude, label, postalCode: location.postalCode };
     updateRadarLink(activeLocation);
+    updatePollenLink(activeLocation);
     renderFavorites();
-    const [hourly, daily, alerts, stations] = await Promise.all([
+    const [hourly, daily, alerts, stations, postalCode] = await Promise.all([
       getJSON(p.forecastHourly), getJSON(p.forecast),
       getJSON(`https://api.weather.gov/alerts/active?point=${coords}`),
-      getJSON(p.observationStations)
+      getJSON(p.observationStations),
+      resolvePostalCode(activeLocation, relative?.city, relative?.state)
     ]);
+    activeLocation.postalCode = postalCode;
+    favorites = favorites.map(item => sameLocation(item, activeLocation) ? { ...item, postalCode } : item);
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+    updatePollenLink(activeLocation);
+    renderFavorites();
     const observation = await getFreshObservation(stations);
     let office = null;
     if (p.forecastOffice) {
@@ -384,7 +421,7 @@ async function loadWeather(location = activeLocation) {
     }
     const data = {
       label, observation, hourly, daily, alerts, office,
-      location: { latitude: location.latitude, longitude: location.longitude },
+      location: { latitude: location.latitude, longitude: location.longitude, postalCode },
       timeZone: p.timeZone,
       savedAt: new Date().toISOString()
     };
@@ -450,7 +487,8 @@ $("#searchForm").addEventListener("submit", async event => {
         const state = place.admin1 || place.country_code;
         els.searchResults.hidden = true;
         $("#locationSearch").value = "";
-        loadWeather({ latitude: place.latitude, longitude: place.longitude, label: `${place.name}, ${state}` });
+        const postalCode = /^\d{5}$/.test(query) ? query : place.postcodes?.[0];
+        loadWeather({ latitude: place.latitude, longitude: place.longitude, label: `${place.name}, ${state}`, postalCode });
       }));
     }
     els.searchResults.hidden = false;
@@ -488,5 +526,6 @@ if ("serviceWorker" in navigator && location.protocol.startsWith("http")) naviga
 localStorage.removeItem("wichita-weather-theme-v1");
 updateConnection();
 updateRadarLink(activeLocation);
+updatePollenLink(activeLocation);
 renderFavorites();
 loadWeather(activeLocation);

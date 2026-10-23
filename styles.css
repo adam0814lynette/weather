@@ -74,6 +74,8 @@ h1 { margin: 0; font-size: clamp(1.55rem, 6vw, 2.2rem); letter-spacing: -.04em; 
 .radar-cta strong { font-size: .92rem; }
 .radar-cta small { margin-top: 3px; color: var(--muted); font-size: .7rem; }
 .radar-cta-arrow { color: var(--blue); font-size: 1.25rem; font-weight: 800; text-align: right; }
+.pollen-cta { margin-top: -6px; }
+.pollen-cta .radar-cta-icon { background: var(--surface); color: var(--blue); border: 1px solid var(--line); }
 .status { display: flex; align-items: center; gap: 9px; margin: 5px 2px 14px; color: var(--muted); font-size: .88rem; }
 .status.error { color: var(--warning); }
 .inline-retry { margin-left: 5px; border: 0; padding: 0; color: inherit; background: transparent; font-weight: 800; text-decoration: underline; cursor: pointer; }
