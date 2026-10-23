@@ -3,9 +3,12 @@ const CACHE_KEY = "wichita-weather-last-forecast-v1";
 const LOCATION_KEY = "wichita-weather-location-v1";
 const FAVORITES_KEY = "wichita-weather-favorites-v1";
 const CONDITIONS_KEY = "wichita-weather-conditions-open-v1";
+const PANEL_LAYOUT_KEY = "wichita-weather-panel-layout-v1";
 const MAX_OBSERVATION_AGE = 2 * 60 * 60 * 1000;
+const DEFAULT_PANEL_ORDER = ["radar", "pollen", "current", "hourly", "daily", "astronomy"];
 let activeLocation = readJSON(LOCATION_KEY) || DEFAULT_LOCATION;
 let favorites = readJSON(FAVORITES_KEY) || [];
+let panelLayout = normalizePanelLayout(readJSON(PANEL_LAYOUT_KEY));
 let lastRefreshAt = 0;
 let lastDateKey = "";
 let lastTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -24,11 +27,75 @@ const els = {
   hourly: $("#hourly"), precipChart: $("#precipChart"), daily: $("#daily"), updated: $("#updatedAt"),
   connection: $("#connection"), officeInfo: $("#officeInfo"), searchResults: $("#searchResults"),
   favorites: $("#favorites"), saveLocation: $("#saveLocationBtn"),
-  moreConditions: $(".more-conditions"), hourlyCue: $("#hourlyCue"), refresh: $("#refreshBtn")
+  moreConditions: $(".more-conditions"), hourlyCue: $("#hourlyCue"), refresh: $("#refreshBtn"),
+  panelArea: $("#panelArea"), customize: $("#customizeDialog"), customizeList: $("#customizeList")
 };
 
 function readJSON(key) {
   try { return JSON.parse(localStorage.getItem(key)); } catch (_) { return null; }
+}
+
+function normalizePanelLayout(value) {
+  const savedOrder = Array.isArray(value?.order) ? value.order : [];
+  const order = [...new Set(savedOrder.filter(id => DEFAULT_PANEL_ORDER.includes(id)))];
+  DEFAULT_PANEL_ORDER.forEach(id => { if (!order.includes(id)) order.push(id); });
+  const hidden = Array.isArray(value?.hidden) ? [...new Set(value.hidden.filter(id => DEFAULT_PANEL_ORDER.includes(id)))] : [];
+  return { order, hidden };
+}
+
+function savePanelLayout() {
+  localStorage.setItem(PANEL_LAYOUT_KEY, JSON.stringify(panelLayout));
+}
+
+function applyPanelLayout() {
+  panelLayout.order.forEach(id => {
+    const panel = els.panelArea.querySelector(`[data-panel="${id}"]`);
+    if (!panel) return;
+    panel.hidden = panelLayout.hidden.includes(id);
+    els.panelArea.append(panel);
+  });
+}
+
+function renderCustomizeList() {
+  els.customizeList.replaceChildren();
+  panelLayout.order.forEach((id, index) => {
+    const panel = els.panelArea.querySelector(`[data-panel="${id}"]`);
+    if (!panel) return;
+    const row = document.createElement("div");
+    row.className = "customize-row";
+    const label = document.createElement("label");
+    label.className = "customize-toggle";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = !panelLayout.hidden.includes(id);
+    checkbox.addEventListener("change", () => {
+      panelLayout.hidden = checkbox.checked
+        ? panelLayout.hidden.filter(hiddenId => hiddenId !== id)
+        : [...panelLayout.hidden, id];
+      savePanelLayout();
+      applyPanelLayout();
+    });
+    label.append(checkbox, document.createTextNode(panel.dataset.panelTitle));
+    const controls = document.createElement("span");
+    controls.className = "order-buttons";
+    [["↑", -1, `Move ${panel.dataset.panelTitle} up`], ["↓", 1, `Move ${panel.dataset.panelTitle} down`]].forEach(([symbol, direction, accessibleLabel]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = symbol;
+      button.setAttribute("aria-label", accessibleLabel);
+      button.disabled = direction === -1 ? index === 0 : index === panelLayout.order.length - 1;
+      button.addEventListener("click", () => {
+        const target = index + direction;
+        [panelLayout.order[index], panelLayout.order[target]] = [panelLayout.order[target], panelLayout.order[index]];
+        savePanelLayout();
+        applyPanelLayout();
+        renderCustomizeList();
+      });
+      controls.append(button);
+    });
+    row.append(label, controls);
+    els.customizeList.append(row);
+  });
 }
 
 function setStatus(message = "", error = false) {
@@ -454,6 +521,16 @@ $("#locateBtn").addEventListener("click", () => {
   );
 });
 els.refresh.addEventListener("click", () => loadWeather(activeLocation));
+$("#customizeBtn").addEventListener("click", () => {
+  renderCustomizeList();
+  els.customize.showModal();
+});
+$("#resetLayoutBtn").addEventListener("click", () => {
+  panelLayout = normalizePanelLayout(null);
+  savePanelLayout();
+  applyPanelLayout();
+  renderCustomizeList();
+});
 els.moreConditions.open = localStorage.getItem(CONDITIONS_KEY) === "true";
 els.moreConditions.addEventListener("toggle", () => localStorage.setItem(CONDITIONS_KEY, String(els.moreConditions.open)));
 els.hourly.addEventListener("scroll", updateHourlyCue, { passive: true });
@@ -525,6 +602,7 @@ setInterval(updateAgeLabel, 60000);
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js");
 localStorage.removeItem("wichita-weather-theme-v1");
 updateConnection();
+applyPanelLayout();
 updateRadarLink(activeLocation);
 updatePollenLink(activeLocation);
 renderFavorites();

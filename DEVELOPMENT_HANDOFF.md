@@ -4,7 +4,7 @@ This is the living technical guide for Wichita Weather. Update it whenever behav
 
 ## Project status
 
-- Current version: **1.7.0**
+- Current version: **1.8.0**
 - Architecture: static client-side Progressive Web App (PWA)
 - Default location: Wichita, Kansas (`37.6872, -97.3301`)
 - Build system: none
@@ -177,6 +177,7 @@ The following keys are currently used:
 | `wichita-weather-location-v1` | Active latitude, longitude, display label, and representative postal code |
 | `wichita-weather-favorites-v1` | Up to five saved location shortcuts, including resolved postal codes |
 | `wichita-weather-conditions-open-v1` | Whether the More conditions panel was left expanded |
+| `wichita-weather-panel-layout-v1` | Ordered panel identifiers and the identifiers of hidden panels |
 
 Storage values are read defensively through `readJSON()`. If a value is missing or malformed, the app falls back to safe defaults.
 
@@ -188,7 +189,13 @@ There are two separate caching mechanisms:
 
 ### Application shell
 
-`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v19`.
+`sw.js` stores the local HTML, CSS, JavaScript, manifest, and icons. The current service-worker cache is `wichita-weather-shell-v20`.
+
+## Layout customization
+
+The Customize button opens a native dialog that lists the six movable data panels: radar, pollen, current conditions, hourly forecast, daily forecast, and astronomy. Users can show or hide each panel and move it up or down. `normalizePanelLayout()` validates saved identifiers, removes duplicates, and appends any panels introduced by a future release so an older preference cannot permanently omit new content.
+
+`applyPanelLayout()` moves the existing DOM nodes rather than recreating them, preserving their event handlers and rendered weather data. Location controls and active alerts stay outside `#panelArea` and therefore remain fixed at the top. Restore defaults returns every panel to its original visible order. Do not move safety-critical alerts into the customizable region.
 
 For same-origin application files, the service worker uses a network-first strategy and falls back to its cache when the network fails. Activating a new worker removes older application-shell caches.
 
@@ -269,6 +276,8 @@ Test at minimum:
 - Active alert expansion when alerts are available
 - Official NWS radar link
 - Pollen.com link for Wichita, a city search, an exact ZIP search, and a GPS-style location
+- Hiding, restoring, and reordering each customizable panel
+- Persistence of customized layout after reload and restoration of the default layout
 - Offline reload with a previously saved forecast
 - Complete first load with no saved forecast and no network
 - Keyboard navigation and visible focus
@@ -306,6 +315,13 @@ Good candidates for future work include:
 Before adding a weather-data source, document its ownership, update frequency, rate limits, attribution requirements, CORS behavior, and fallback behavior.
 
 ## Change log
+
+### 1.8.0 — 2026-10-23
+
+- Added persistent panel visibility and up/down ordering controls in an accessible Customize dialog.
+- Kept location controls and active weather alerts fixed outside the customizable region.
+- Added saved-layout validation and a Restore defaults action.
+- Updated the service-worker cache to `wichita-weather-shell-v20`.
 
 ### 1.7.0 — 2026-10-23
 

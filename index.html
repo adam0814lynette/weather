@@ -58,7 +58,8 @@
 
     <section id="alerts" class="alerts" aria-label="Weather alerts" hidden></section>
 
-    <a class="radar-cta" id="radarLink" href="https://radar.weather.gov/" target="_blank" rel="noreferrer">
+    <div class="panel-area" id="panelArea">
+    <a class="radar-cta" id="radarLink" data-panel="radar" data-panel-title="NWS radar" href="https://radar.weather.gov/" target="_blank" rel="noreferrer">
       <span class="radar-cta-icon" aria-hidden="true">
         <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="18"/><circle cx="24" cy="24" r="11"/><circle cx="24" cy="24" r="3"/><path d="M24 24 39 14M24 6v4M42 24h-4M24 42v-4M6 24h4"/></svg>
       </span>
@@ -66,7 +67,7 @@
       <span class="radar-cta-arrow" aria-hidden="true">↗</span>
     </a>
 
-    <a class="radar-cta pollen-cta" id="pollenLink" href="https://www.pollen.com/forecast/current/pollen/67202" target="_blank" rel="noreferrer">
+    <a class="radar-cta pollen-cta" id="pollenLink" data-panel="pollen" data-panel-title="Pollen forecast" href="https://www.pollen.com/forecast/current/pollen/67202" target="_blank" rel="noreferrer">
       <span class="radar-cta-icon" aria-hidden="true">
         <svg viewBox="0 0 48 48"><circle cx="24" cy="24" r="4"/><path d="M24 20c-7-2-8-10-3-13 5 1 7 7 3 13Zm4 3c2-7 10-8 13-3-1 5-7 7-13 3Zm-4 5c7 2 8 10 3 13-5-1-7-7-3-13Zm-4-4c-2 7-10 8-13 3 1-5 7-7 13-3Z"/><circle cx="39" cy="9" r="1.5"/><circle cx="10" cy="11" r="1.5"/></svg>
       </span>
@@ -74,7 +75,7 @@
       <span class="radar-cta-arrow" aria-hidden="true">↗</span>
     </a>
 
-    <section class="hero card" id="current" aria-label="Current conditions">
+    <section class="hero card" id="current" data-panel="current" data-panel-title="Current conditions" aria-label="Current conditions">
       <div class="current-main">
         <div>
           <p class="label" id="currentLabel">Current conditions</p>
@@ -99,7 +100,7 @@
       </details>
     </section>
 
-    <section class="section" aria-labelledby="hourlyTitle">
+    <section class="section" data-panel="hourly" data-panel-title="Hourly forecast" aria-labelledby="hourlyTitle">
       <div class="section-heading">
         <h2 id="hourlyTitle">Hourly forecast</h2>
         <span id="updatedAt"></span>
@@ -111,12 +112,12 @@
       <p class="swipe-cue" id="hourlyCue" aria-hidden="true">Swipe for more <span>→</span></p>
     </section>
 
-    <section class="section" aria-labelledby="dailyTitle">
+    <section class="section" data-panel="daily" data-panel-title="Daily forecast" aria-labelledby="dailyTitle">
       <div class="section-heading"><h2 id="dailyTitle">Daily forecast</h2></div>
       <div class="daily-list" id="daily" aria-live="polite"></div>
     </section>
 
-    <section class="section astronomy-card" aria-labelledby="astronomyTitle">
+    <section class="section astronomy-card" data-panel="astronomy" data-panel-title="Sun &amp; moon" aria-labelledby="astronomyTitle">
       <div class="section-heading"><h2 id="astronomyTitle">Sun &amp; moon</h2><span id="astronomyDate"></span></div>
       <div class="solar-grid" aria-label="Dawn, sunrise, sunset, and dusk times">
         <div><small>Dawn</small><strong id="dawnTime">--</strong></div>
@@ -131,10 +132,14 @@
       </div>
       <p class="astronomy-note">Solar and lunar values are calculated locally and are approximate.</p>
     </section>
+    </div>
 
     <footer>
       <p>Official forecast data from the <a href="https://www.weather.gov/" target="_blank" rel="noreferrer">National Weather Service</a>. Location search by <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>.</p>
-      <button id="refreshBtn" type="button">Refresh forecast</button>
+      <div class="footer-actions">
+        <button id="customizeBtn" type="button">Customize</button>
+        <button id="refreshBtn" type="button">Refresh forecast</button>
+      </div>
     </footer>
     <details class="about">
       <summary>About this forecast &amp; privacy</summary>
@@ -144,9 +149,23 @@
       </div>
     </details>
     <div class="bottom-row">
-      <p class="app-version" aria-label="Application version 1.7.0">v1.7.0</p>
+      <p class="app-version" aria-label="Application version 1.8.0">v1.8.0</p>
     </div>
   </main>
+  <dialog class="customize-dialog" id="customizeDialog" aria-labelledby="customizeTitle">
+    <form method="dialog">
+      <div class="customize-heading">
+        <div><p class="eyebrow">Display settings</p><h2 id="customizeTitle">Customize layout</h2></div>
+        <button class="dialog-close" value="close" aria-label="Close customize layout">×</button>
+      </div>
+      <p class="customize-help">Choose which panels appear and use the arrows to change their order.</p>
+      <div class="customize-list" id="customizeList"></div>
+      <div class="customize-actions">
+        <button id="resetLayoutBtn" type="button">Restore defaults</button>
+        <button class="done-button" value="close">Done</button>
+      </div>
+    </form>
+  </dialog>
   <template id="alertTemplate">
     <details class="alert-card">
       <summary><span class="alert-symbol">!</span><span><strong></strong><small></small></span><span class="chevron">⌄</span></summary>
